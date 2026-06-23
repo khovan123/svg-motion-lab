@@ -97,9 +97,10 @@ async function collectPrototype(roots, stateMap, rootIds) {
     : [];
 
   const variableData = await readVariables();
+  const firstPoint = points.find(point => point.stateId);
   return {
     version: 1,
-    startStateId: points.find(point => point.stateId)?.stateId || null,
+    startStateId: firstPoint ? firstPoint.stateId : null,
     flowStartingPoints: points,
     reactions,
     variables: variableData.variables,
@@ -174,8 +175,14 @@ function orderStateNodes(nodes, stateMap, rootIds) {
 
   const flowPoints = Array.isArray(figma.currentPage.flowStartingPoints) ? figma.currentPage.flowStartingPoints : [];
   let startId = flowPoints.map(point => rootIds.has(point.nodeId) ? point.nodeId : stateMap.get(point.nodeId)).find(Boolean);
-  if (!startId) startId = nodes.find(node => /^(1st|start|initial|first)$/i.test(String(node.name || "").trim()))?.id;
-  if (!startId) startId = nodes.find(node => outgoing.has(node.id) && !incoming.has(node.id))?.id;
+  if (!startId) {
+    const namedStart = nodes.find(node => /^(1st|start|initial|first)$/i.test(String(node.name || "").trim()));
+    if (namedStart) startId = namedStart.id;
+  }
+  if (!startId) {
+    const graphStart = nodes.find(node => outgoing.has(node.id) && !incoming.has(node.id));
+    if (graphStart) startId = graphStart.id;
+  }
 
   const canvasOrder = [...nodes].sort((a, b) => {
     const ay = a.absoluteBoundingBox ? a.absoluteBoundingBox.y : a.y || 0;
