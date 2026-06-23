@@ -1,0 +1,98 @@
+{
+  "schema": "svg-motion-lab/figma-manifest@1",
+  "startNodeId": "s1",
+  "stateOrder": ["s1", "s2", "s3"],
+  "states": [
+    {
+      "id": "s1",
+      "name": "State 1",
+      "width": 355,
+      "height": 240,
+      "layers": [
+        {
+          "id": "r1",
+          "key": "root[0]",
+          "semanticPath": "root[0]",
+          "parentKey": null,
+          "siblingIndex": 0,
+          "name": "Root",
+          "type": "FRAME",
+          "visible": true,
+          "opacity": 1,
+          "bounds": {"x":0,"y":0,"width":355,"height":240},
+          "fills": [{"type":"SOLID","color":{"r":1,"g":1,"b":1,"a":1}}],
+          "strokes": [],
+          "strokeWeight": 0,
+          "cornerRadius":{"all":16},
+          "vectorPaths": []
+        },
+        {
+          "id":"box1",
+          "key":"chart/bar",
+          "pluginKey":"chart/bar",
+          "semanticPath":"root[0]/bar[0]",
+          "parentKey":"root[0]",
+          "siblingIndex":1,
+          "name":"Bar",
+          "type":"RECTANGLE",
+          "visible":true,
+          "opacity":1,
+          "bounds":{"x":40,"y":120,"width":34,"height":80},
+          "fills":[{"type":"GRADIENT_LINEAR","gradientHandlePositions":[{"x":0.5,"y":0},{"x":0.5,"y":1},{"x":1,"y":0}],"gradientStops":[{"position":0,"color":{"r":0.64,"g":0.91,"b":1,"a":1}},{"position":1,"color":{"r":0,"g":0.47,"b":0.92,"a":1}}]}],
+          "strokes":[],"strokeWeight":0,"cornerRadius":{"all":8},"vectorPaths":[]
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "name": "State 2",
+      "width": 355,
+      "height": 240,
+      "layers": [
+        {
+          "id": "r2",
+          "key": "root[0]",
+          "semanticPath": "root[0]",
+          "parentKey": null,
+          "siblingIndex": 0,
+          "name": "Root",
+          "type": "FRAME",
+          "visible": true,
+          "opacity": 1,
+          "bounds": {"x":0,"y":0,"width":355,"height":240},
+          "fills": [{"type":"SOLID","color":{"r":1,"g":1,"b":1,"a":1}}],
+          "strokes": [],"strokeWeight":0,"cornerRadius":{"all":16},"vectorPaths":[]
+        },
+        {
+          "id":"box2","key":"chart/bar","pluginKey":"chart/bar","semanticPath":"root[0]/bar[0]","parentKey":"root[0]","siblingIndex":1,"name":"Bar","type":"RECTANGLE","visible":true,"opacity":1,
+          "bounds":{"x":145,"y":55,"width":58,"height":145},
+          "fills":[{"type":"GRADIENT_LINEAR","gradientHandlePositions":[{"x":0,"y":0.5},{"x":1,"y":0.5},{"x":0,"y":1}],"gradientStops":[{"position":0,"color":{"r":1,"g":0.72,"b":0,"a":1}},{"position":1,"color":{"r":0.92,"g":0.3,"b":0.05,"a":1}}]}],
+          "strokes":[],"strokeWeight":0,"cornerRadius":{"all":14},"vectorPaths":[]
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "name": "State 3",
+      "width": 355,
+      "height": 240,
+      "layers": [
+        {
+          "id": "r3","key":"root[0]","semanticPath":"root[0]","parentKey":null,"siblingIndex":0,"name":"Root","type":"FRAME","visible":true,"opacity":1,
+          "bounds":{"x":0,"y":0,"width":355,"height":240},"fills":[{"type":"SOLID","color":{"r":1,"g":1,"b":1,"a":1}}],"strokes":[],"strokeWeight":0,"cornerRadius":{"all":16},"vectorPaths":[]
+        },
+        {
+          "id":"box3","key":"chart/bar","pluginKey":"chart/bar","semanticPath":"root[0]/bar[0]","parentKey":"root[0]","siblingIndex":1,"name":"Bar","type":"RECTANGLE","visible":true,"opacity":0.72,
+          "bounds":{"x":262,"y":93,"width":42,"height":107},
+          "fills":[{"type":"GRADIENT_LINEAR","gradientHandlePositions":[{"x":0.5,"y":0},{"x":0.5,"y":1},{"x":1,"y":0}],"gradientStops":[{"position":0,"color":{"r":0.75,"g":0.93,"b":1,"a":1}},{"position":1,"color":{"r":0.2,"g":0.34,"b":0.95,"a":1}}]}],
+          "strokes":[],"strokeWeight":0,"cornerRadius":{"all":10},"vectorPaths":[]
+        }
+      ]
+    }
+  ],
+  "transitions": [
+    {"from":"s1","to":"s2","trigger":{"type":"AFTER_TIMEOUT","timeout":0.5},"transition":{"type":"SMART_ANIMATE","duration":0.8,"easing":{"type":"CUSTOM_CUBIC_BEZIER","easingFunctionCubicBezier":{"x1":0.4,"y1":0,"x2":0.2,"y2":1}}}},
+    {"from":"s2","to":"s3","trigger":{"type":"AFTER_TIMEOUT","timeout":0.6},"transition":{"type":"SMART_ANIMATE","duration":0.9,"easing":{"type":"CUSTOM_SPRING","easingFunctionSpring":{"mass":1,"stiffness":120,"damping":14,"initialVelocity":0}}}},
+    {"from":"s3","to":"s1","trigger":{"type":"AFTER_TIMEOUT","timeout":0.5},"transition":{"type":"SMART_ANIMATE","duration":0.7,"easing":{"type":"EASE_IN_AND_OUT"}}}
+  ]
+}

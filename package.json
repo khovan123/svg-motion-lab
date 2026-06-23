@@ -1,0 +1,10 @@
+{
+  "name": "svg-motion-lab",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "build": "node generate-animate.js --manifest motion-manifest.json",
+    "build:example": "node generate-animate.js --manifest fixtures/motion-manifest.example.json",
+    "test": "node test/compiler.test.js"
+  }
+}

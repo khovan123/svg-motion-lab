@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SVG Motion Manifest Exporter</title>
+<style>
+  :root{font:13px/1.45 Inter,system-ui,sans-serif;color:var(--figma-color-text,#1f2328);background:var(--figma-color-bg,#fff)}
+  *{box-sizing:border-box}body{margin:0;padding:16px}.stack{display:grid;gap:12px}.card{padding:12px;border:1px solid var(--figma-color-border,#ddd);border-radius:10px}.row{display:flex;gap:8px;align-items:center}.muted{color:var(--figma-color-text-secondary,#666)}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--figma-color-bg-brand,#0d99ff);color:#fff;font:inherit;font-weight:650;cursor:pointer}button[disabled]{opacity:.5;cursor:default}input[type=checkbox]{accent-color:var(--figma-color-bg-brand,#0d99ff)}code{font-size:12px}#status{min-height:38px;white-space:pre-wrap}
+</style>
+<body>
+<div class="stack">
+  <div>
+    <strong>SVG Motion Manifest Exporter</strong>
+    <div class="muted">Chọn các frame/component state theo đúng thứ tự prototype, sau đó export.</div>
+  </div>
+  <div class="card stack">
+    <label class="row"><input id="includeHidden" type="checkbox"> Bao gồm layer ẩn</label>
+    <label class="row"><input id="includeStateSvg" type="checkbox" checked> Kèm SVG snapshot từng state để fallback</label>
+  </div>
+  <button id="export">Export motion-manifest.json</button>
+  <div id="status" class="card muted">Sẵn sàng.</div>
+</div>
+<script>
+const button=document.querySelector('#export');const status=document.querySelector('#status');
+button.onclick=()=>{button.disabled=true;status.textContent='Đang đọc layer, vector, gradient và prototype reactions…';parent.postMessage({pluginMessage:{type:'export',options:{includeHidden:document.querySelector('#includeHidden').checked,includeStateSvg:document.querySelector('#includeStateSvg').checked}}},'*')};
+onmessage=(event)=>{const msg=event.data.pluginMessage||{};if(msg.type==='error'){button.disabled=false;status.textContent='Lỗi: '+msg.message;return}if(msg.type==='progress'){status.textContent=msg.message;return}if(msg.type==='manifest'){const json=JSON.stringify(msg.manifest,null,2);const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='motion-manifest.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);button.disabled=false;status.textContent='Đã export '+msg.manifest.states.length+' state và '+msg.manifest.transitions.length+' transition.'}}
+</script>
+</body>
+</html>
