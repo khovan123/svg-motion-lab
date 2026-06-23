@@ -4,6 +4,10 @@ const fs = require("fs");
 const path = require("path");
 const { compileManifest, sampleSpring, easingToSpline } = require("../src/figma-motion-compiler");
 
+const pluginMain = fs.readFileSync(path.join(__dirname, "../figma-plugin/prototype-code.js"), "utf8");
+assert.ok(!pluginMain.includes("?."), "Figma plugin main must not use optional chaining");
+assert.ok(!pluginMain.includes("??"), "Figma plugin main must not use nullish coalescing");
+
 const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/motion-manifest.example.json"), "utf8"));
 const result = compileManifest(fixture);
 assert.ok(result.svg.includes("<linearGradient"));
