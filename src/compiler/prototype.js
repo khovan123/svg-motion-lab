@@ -38,6 +38,13 @@ function fallbackReactions(manifest) {
 
 function buildPrototypeIR(manifest, states) {
   const stateIds = new Set(states.map(state => state.id));
+  const layerBounds = new Map();
+  for (const state of states) {
+    for (const layer of state.layers || []) {
+      layerBounds.set(`${state.id}:${layer.id}`, layer.bounds || null);
+    }
+  }
+
   const prototype = manifest.prototype || {};
   const sourceReactions = Array.isArray(prototype.reactions)
     ? prototype.reactions
@@ -46,7 +53,9 @@ function buildPrototypeIR(manifest, states) {
     id: reaction.id || `reaction-${index}`,
     sourceStateId: reaction.sourceStateId,
     sourceNodeId: reaction.sourceNodeId || null,
+    sourceNodeName: reaction.sourceNodeName || null,
     sourceLayerKey: reaction.sourceLayerKey || null,
+    sourceBounds: reaction.sourceBounds || layerBounds.get(`${reaction.sourceStateId}:${reaction.sourceNodeId}`) || null,
     trigger: reaction.trigger || { type: "ON_CLICK" },
     actions: actionList(reaction).map(action => ({ ...action }))
   })).filter(reaction => stateIds.has(reaction.sourceStateId));
@@ -66,13 +75,28 @@ function buildPrototypeIR(manifest, states) {
   };
 }
 
+function walkActions(actions, callback) {
+  for (const action of actions || []) {
+    if (!action || typeof action !== "object") continue;
+    callback(action);
+    for (const value of Object.values(action)) {
+      if (Array.isArray(value)) walkActions(value, callback);
+      else if (value && typeof value === "object" && Array.isArray(value.actions)) {
+        walkActions(value.actions, callback);
+      }
+    }
+  }
+}
+
 function collectUnsupported(reactions) {
   const supported = new Set(["NODE", "BACK", "CLOSE", "SET_VARIABLE", "SET_VARIABLE_MODE", "CONDITIONAL"]);
   const result = [];
   for (const reaction of reactions) {
-    for (const action of reaction.actions) {
-      if (action && !supported.has(action.type)) result.push({ reactionId: reaction.id, type: action.type });
-    }
+    walkActions(reaction.actions, action => {
+      if (action.type && !supported.has(action.type)) {
+        result.push({ reactionId: reaction.id, type: action.type });
+      }
+    });
   }
   return result;
 }
