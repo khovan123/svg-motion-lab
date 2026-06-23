@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SVG Motion Lab</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <canvas id="scene" aria-hidden="true"></canvas>
+
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">SVG Motion Lab</p>
+          <h1>Tạo animated SVG từ danh sách frame tải lên</h1>
+          <p class="lead">Upload nhiều file SVG, sắp xếp frame, xem trước chuyển động, tải xuống file <code>.svg</code>, file code nhúng hoặc đóng gói thành <code>.zip</code>.</p>
+        </div>
+        <div class="hero-stats" aria-label="Thông tin animation">
+          <div>
+            <strong id="frameCount">0</strong>
+            <span>frames</span>
+          </div>
+          <div>
+            <strong id="totalDuration">0.0s</strong>
+            <span>loop</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Công cụ tạo animated SVG">
+        <div class="panel controls-panel">
+          <div class="dropzone" id="dropzone">
+            <input id="fileInput" type="file" accept=".svg,image/svg+xml" multiple>
+            <div class="drop-icon">+</div>
+            <h2>Thả SVG vào đây</h2>
+            <p>Hoặc bấm để chọn nhiều file. Tên file sẽ được sort tự nhiên để giữ đúng thứ tự frame.</p>
+          </div>
+
+          <div class="settings-grid">
+            <label>
+              <span>Frame duration</span>
+              <input id="frameDurationInput" type="number" min="0.02" step="0.01" value="0.10">
+            </label>
+            <label>
+              <span>Width</span>
+              <input id="widthInput" type="number" min="1" value="355">
+            </label>
+            <label>
+              <span>Height</span>
+              <input id="heightInput" type="number" min="1" value="240">
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="generateBtn" type="button">Generate</button>
+            <button id="downloadSvgBtn" type="button" disabled>Tải .svg</button>
+            <button id="downloadCodeBtn" type="button" disabled>Tải JSX</button>
+            <button id="downloadHtmlBtn" type="button" disabled>Tải HTML</button>
+            <button id="downloadZipBtn" type="button" disabled>Tải .zip</button>
+          </div>
+
+          <p class="status" id="status">Chưa có SVG nào được tải lên.</p>
+        </div>
+
+        <div class="panel preview-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Preview</p>
+              <h2>animation.svg</h2>
+            </div>
+            <button id="clearBtn" class="ghost-button" type="button">Xóa</button>
+          </div>
+          <div id="preview" class="preview">
+            <span>Preview sẽ xuất hiện sau khi generate.</span>
+          </div>
+        </div>
+
+        <div class="panel file-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Frame list</p>
+              <h2>SVG đã tải lên</h2>
+            </div>
+          </div>
+          <ol id="fileList" class="file-list"></ol>
+        </div>
+
+        <div class="panel code-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Embed code</p>
+              <h2>React JSX component</h2>
+            </div>
+          </div>
+          <pre id="codePreview" class="code-preview">Generate animation để xem code nhúng.</pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="generate-animate.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
