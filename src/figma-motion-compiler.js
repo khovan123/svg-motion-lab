@@ -14,10 +14,33 @@ const DEFAULTS = {
   springSamples: 36,
   precision: 4,
   loop: true,
-  renderMode: "prototype"
+  renderMode: "auto"
 };
 
-function validate(manifest) {
+function schemaVersion(manifest) {
+  const match = String(manifest && manifest.schema || "").match(/@(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function complexVisualLayers(states) {
+  const result = [];
+  for (const state of states || []) {
+    for (const layer of state.layers || []) {
+      const name = String(layer.name || "");
+      const type = String(layer.type || "");
+      if (
+        type === "BOOLEAN_OPERATION" ||
+        type === "SLICE" ||
+        (type === "GROUP" && /mask|clip|filter/i.test(name))
+      ) {
+        result.push({ stateId: state.id, key: layer.key || layer.semanticPath || layer.id, type, name });
+      }
+    }
+  }
+  return result;
+}
+
+function preflight(manifest, options = {}) {
   if (!manifest || !Array.isArray(manifest.states) || !manifest.states.length) {
     throw new Error("Manifest phải có ít nhất một state.");
   }
@@ -26,11 +49,54 @@ function validate(manifest) {
       throw new Error(`State không hợp lệ: ${state && state.name || "unknown"}`);
     }
   }
+
+  const version = schemaVersion(manifest);
+  const prototypeReady = Boolean(manifest.prototype && Array.isArray(manifest.prototype.reactions));
+  const snapshotsReady = hasSnapshots(manifest.states);
+  const requestedMode = options.renderMode || manifest.calibration && manifest.calibration.renderMode || (prototypeReady ? "prototype" : "semantic");
+  const complex = complexVisualLayers(manifest.states);
+
+  if (requestedMode === "prototype") {
+    if (version < 3 || !prototypeReady) {
+      throw new Error(
+        `Manifest ${manifest.schema || "không rõ schema"} chưa phải prototype-first v3. ` +
+        "Hãy reload plugin có main=prototype-code.js rồi export lại; file đúng phải có schema svg-motion-lab/figma-manifest@3 và object prototype."
+      );
+    }
+    if (!snapshotsReady) {
+      const missing = manifest.states.filter(state => !state.svg).map(state => state.name || state.id);
+      throw new Error(
+        `Prototype manifest thiếu SVG snapshot ở ${missing.length} state: ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? "…" : ""}. ` +
+        "Exporter v3 luôn bật snapshot; hãy export lại thay vì build semantic fallback."
+      );
+    }
+  }
+
+  if (!snapshotsReady && complex.length) {
+    const sample = complex.slice(0, 4).map(layer => `${layer.key} (${layer.type})`).join(", ");
+    throw new Error(
+      `Không thể build chính xác vì manifest không có SVG snapshot nhưng chứa layer phức tạp: ${sample}${complex.length > 4 ? "…" : ""}. ` +
+      "Semantic renderer sẽ làm mất mask/clip/filter. Hãy dùng exporter schema v3 và export lại với snapshot bắt buộc."
+    );
+  }
+
+  return {
+    version,
+    prototypeReady,
+    snapshotsReady,
+    complexVisualLayers: complex,
+    renderMode: requestedMode
+  };
 }
 
 function compileManifest(manifest, options = {}) {
-  validate(manifest);
-  const cfg = { ...DEFAULTS, ...(manifest.calibration || {}), ...options };
+  const readiness = preflight(manifest, options);
+  const cfg = {
+    ...DEFAULTS,
+    ...(manifest.calibration || {}),
+    ...options,
+    renderMode: readiness.renderMode
+  };
   const states = orderStates(manifest);
   const prototype = buildPrototypeIR(manifest, states);
   const schedule = buildAutoplay(states, prototype, cfg);
@@ -39,6 +105,10 @@ function compileManifest(manifest, options = {}) {
   const defs = [];
   const body = [];
   const report = {
+    manifestSchema: manifest.schema || null,
+    manifestVersion: readiness.version,
+    prototypeReady: readiness.prototypeReady,
+    snapshotsReady: readiness.snapshotsReady,
     renderMode: "semantic",
     matchedLayers: 0,
     fallbackLayers: 0,
@@ -93,6 +163,9 @@ function compileFile(file, options = {}) {
 
 module.exports = {
   DEFAULTS,
+  schemaVersion,
+  complexVisualLayers,
+  preflight,
   compileManifest,
   compileFile,
   orderStates,
