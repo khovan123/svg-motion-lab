@@ -82,7 +82,7 @@ function compileManifest(manifest, options = {}) {
     ""
   ].join("\n");
 
-  const html = renderHtml({ states, prototype, width, height, report });
+  const html = renderHtml({ states, prototype, width, height, report, svg, duration });
   return { svg, html, report, schedule, prototype };
 }
 
