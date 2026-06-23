@@ -281,7 +281,55 @@ function paints(value) { if (!Array.isArray(value)) return []; return value.filt
 function paths(node) { return "vectorPaths" in node && Array.isArray(node.vectorPaths) ? node.vectorPaths.map(path => ({ data: path.data, windingRule: path.windingRule })) : []; }
 function textData(node) { if (node.type !== "TEXT") return null; return { characters: node.characters, fontSize: typeof node.fontSize === "number" ? number(node.fontSize) : null, fontName: node.fontName && node.fontName !== figma.mixed ? clone(node.fontName) : null, fontWeight: typeof node.fontWeight === "number" ? node.fontWeight : null, textAlignHorizontal: node.textAlignHorizontal, textAlignVertical: node.textAlignVertical }; }
 function corners(node) { if (!("cornerRadius" in node)) return null; if (typeof node.cornerRadius === "number") return { all: number(node.cornerRadius) }; return { topLeft: number(node.topLeftRadius || 0), topRight: number(node.topRightRadius || 0), bottomRight: number(node.bottomRightRadius || 0), bottomLeft: number(node.bottomLeftRadius || 0) }; }
-async function exportSvg(node) { try { return new TextDecoder("utf-8").decode(await node.exportAsync({ format: "SVG", svgIdAttribute: true, svgOutlineText: false, svgSimplifyStroke: false })); } catch (_error) { return null; } }
+async function exportSvg(node) {
+  let bytes;
+  try {
+    bytes = await node.exportAsync({ format: "SVG" });
+  } catch (error) {
+    throw new Error(`Không export được SVG cho state "${node.name}": ${error && error.message ? error.message : String(error)}`);
+  }
+  const svg = decodeUtf8(bytes);
+  if (!svg || svg.indexOf("<svg") < 0) {
+    throw new Error(`Figma trả về SVG không hợp lệ cho state "${node.name}".`);
+  }
+  return svg;
+}
+function decodeUtf8(bytes) {
+  let output = "";
+  let index = 0;
+  while (index < bytes.length) {
+    const first = bytes[index++];
+    if (first < 128) {
+      output += String.fromCharCode(first);
+      continue;
+    }
+    if ((first & 224) === 192) {
+      if (index >= bytes.length) { output += "�"; break; }
+      const second = bytes[index++];
+      output += String.fromCharCode(((first & 31) << 6) | (second & 63));
+      continue;
+    }
+    if ((first & 240) === 224) {
+      if (index + 1 >= bytes.length) { output += "�"; break; }
+      const second = bytes[index++];
+      const third = bytes[index++];
+      output += String.fromCharCode(((first & 15) << 12) | ((second & 63) << 6) | (third & 63));
+      continue;
+    }
+    if ((first & 248) === 240) {
+      if (index + 2 >= bytes.length) { output += "�"; break; }
+      const second = bytes[index++];
+      const third = bytes[index++];
+      const fourth = bytes[index++];
+      let point = ((first & 7) << 18) | ((second & 63) << 12) | ((third & 63) << 6) | (fourth & 63);
+      point -= 65536;
+      output += String.fromCharCode(55296 + (point >> 10), 56320 + (point & 1023));
+      continue;
+    }
+    output += "�";
+  }
+  return output;
+}
 function color(value, opacity) { return { r: number(value.r), g: number(value.g), b: number(value.b), a: number(value.a == null ? (opacity == null ? 1 : opacity) : value.a) }; }
 function point(value) { return { x: number(value.x), y: number(value.y) }; }
 function matrix(value) { return Array.isArray(value) ? value.map(row => row.map(number)) : null; }
