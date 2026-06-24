@@ -300,18 +300,54 @@ function orderStates(nodes) {
 
 function variantContext(root) {
   const parent = root.parent && root.parent.type === "COMPONENT_SET" ? root.parent : null;
-  const properties = "variantProperties" in root && root.variantProperties ? clone(root.variantProperties) : {};
+  const fallbackProperties = parseVariantPropertiesFromName(root.name || "");
+  let properties = fallbackProperties;
+  let variantPropertiesError = null;
+
+  try {
+    if ("variantProperties" in root) {
+      const value = root.variantProperties;
+      if (value && typeof value === "object") properties = clone(value);
+    }
+  } catch (error) {
+    variantPropertiesError = error && error.message ? error.message : String(error);
+  }
+
   const variantKey = Object.keys(properties)
     .sort()
     .map(key => `${key}=${properties[key]}`)
     .join("|") || normalizeName(root.name || root.id);
+
   return {
     variantRootId: root.id,
     componentSetId: parent ? parent.id : null,
-    componentSetName: parent ? parent.name : null,
+    componentSetName: safeNodeName(parent),
     variantKey,
-    properties
+    properties,
+    propertiesSource: variantPropertiesError ? "name-fallback" : "figma-api",
+    variantPropertiesError
   };
+}
+
+function parseVariantPropertiesFromName(name) {
+  const properties = {};
+  for (const part of String(name || "").split(",")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (key) properties[key] = value;
+  }
+  return properties;
+}
+
+function safeNodeName(node) {
+  if (!node) return null;
+  try {
+    return node.name || null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function maskGeometry(node, stableNodeId, bounds) {
