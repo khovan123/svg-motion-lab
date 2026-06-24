@@ -23,46 +23,19 @@ S.utf8Base64=function(text){const bytes=new TextEncoder().encode(text);let binar
 S.dataUri=svg=>'data:image/svg+xml;base64,'+S.utf8Base64(svg);
 S.requiresFidelity=function(manifest){return manifest.states.some(state=>/<(?:mask|clipPath|filter|fe[A-Z])/i.test(state.svg||''))};
 
-function identityOf(layer){return layer&&(layer.stableNodeId||layer.pluginKey||layer.structuralSlot||layer.semanticPath||layer.key)||null}
-function motionHint(fromState,toState,width,height){
-  const fromLayers=fromState&&fromState.layers||[],toLayers=toState&&toState.layers||[];
-  const toMap=new Map();
-  toLayers.forEach(layer=>{const id=identityOf(layer);if(id)toMap.set(id,layer)});
-  const candidates=[];
-  fromLayers.forEach(layer=>{
-    const id=identityOf(layer),next=id&&toMap.get(id);if(!next||!layer.bounds||!next.bounds)return;
-    const a=layer.bounds,b=next.bounds;
-    const acx=S.num(a.x)+S.num(a.width)/2,acy=S.num(a.y)+S.num(a.height)/2;
-    const bcx=S.num(b.x)+S.num(b.width)/2,bcy=S.num(b.y)+S.num(b.height)/2;
-    const dx=bcx-acx,dy=bcy-acy,distance=Math.hypot(dx,dy);
-    if(distance<.5)return;
-    const area=Math.max(1,S.num(a.width,1)*S.num(a.height,1));
-    const weight=Math.sqrt(area)*distance;
-    candidates.push({dx,dy,weight});
-  });
-  candidates.sort((a,b)=>b.weight-a.weight);
-  const sample=candidates.slice(0,Math.max(1,Math.min(8,Math.ceil(candidates.length*.35))));
-  if(!sample.length)return {dx:0,dy:0};
-  let total=0,dx=0,dy=0;
-  sample.forEach(item=>{const w=item.weight;total+=w;dx+=item.dx*w;dy+=item.dy*w});
-  dx/=total;dy/=total;
-  return {dx:Math.max(-width*.25,Math.min(width*.25,dx)),dy:Math.max(-height*.25,Math.min(height*.25,dy))};
-}
-
 S.buildFidelitySvg=function(manifest,schedule,report){
   const byId=new Map(manifest.states.map(s=>[s.id,s]));
   const states=schedule.stateIds.map(id=>byId.get(id)).filter(Boolean);
   const first=states[0]||manifest.states[0];
   const groups=[];
   states.forEach(function(state,index){
-    groups.push('<g id="fidelity-state-'+index+'" opacity="'+(index===0?1:0)+'"><image x="0" y="0" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" preserveAspectRatio="xMidYMid meet" href="'+S.dataUri(state.svg)+'"/></g>');
+    groups.push('<g id="fidelity-state-'+index+'" opacity="'+(index===0?1:0)+'" visibility="'+(index===0?'visible':'hidden')+'" style="isolation:isolate"><image x="0" y="0" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" preserveAspectRatio="xMidYMid meet" href="'+S.dataUri(state.svg)+'"/></g>');
   });
-  const hints=schedule.segments.map(segment=>motionHint(byId.get(segment.from),byId.get(segment.to),first.width,first.height));
-  const runtimeData={duration:schedule.totalDuration,infinite:schedule.infinite,segments:schedule.segments.map((segment,index)=>({from:states.findIndex(s=>s.id===segment.from),to:states.findIndex(s=>s.id===segment.to),start:segment.transitionStart,end:segment.transitionEnd,hint:hints[index]}))};
+  const runtimeData={duration:schedule.totalDuration,infinite:schedule.infinite,segments:schedule.segments.map(segment=>({from:states.findIndex(s=>s.id===segment.from),to:states.findIndex(s=>s.id===segment.to),start:segment.transitionStart,end:segment.transitionEnd}))};
   const json=JSON.stringify(runtimeData).replace(/</g,'\\u003c');
-  const runtime="(()=>{const D="+json+",svg=document.currentScript.ownerDocument.documentElement,groups=[...svg.querySelectorAll('[id^=fidelity-state-]')];let started=performance.now(),paused=false,pauseAt=0,raf=0,manual=false;const clamp=v=>Math.max(0,Math.min(1,v));const ease=p=>p*p*(3-2*p);function reset(){for(const g of groups){g.style.opacity='0';g.setAttribute('transform','translate(0 0)')}}function render(t){if(!groups.length)return;const total=Math.max(.001,D.duration);if(D.infinite)t=((t%total)+total)%total;else t=Math.max(0,Math.min(total,t));let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<=s.end){segment=s;break}}reset();if(!segment){groups[active].style.opacity='1';return}const raw=clamp((t-segment.start)/Math.max(.001,segment.end-segment.start)),p=ease(raw),alphaIn=Math.sin(p*Math.PI/2)**2,alphaOut=1-alphaIn,h=segment.hint||{dx:0,dy:0};const out=groups[segment.from],inc=groups[segment.to],strength=.08;out.style.opacity=String(alphaOut);inc.style.opacity=String(alphaIn);const outDx=h.dx*p*strength,outDy=h.dy*p*strength,inDx=-h.dx*(1-p)*strength,inDy=-h.dy*(1-p)*strength;out.setAttribute('transform',`translate(${outDx} ${outDy})`);inc.setAttribute('transform',`translate(${inDx} ${inDy})`)}function tick(now){if(!paused&&!manual)render((now-started)/1000);raf=requestAnimationFrame(tick)}const controller={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;started=performance.now()},pause(){paused=true;pauseAt=performance.now()},restart(){manual=false;paused=false;started=performance.now();render(0)}};svg.__motionController=controller;render(0);raf=requestAnimationFrame(tick)})()";
-  report.renderMode='fidelity-motion-compensated';report.semanticTracks=0;report.pathMorphs=0;
-  return '<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" data-render-mode="fidelity-motion-compensated" data-duration="'+S.round(schedule.totalDuration)+'" data-infinite="'+schedule.infinite+'"><g id="motion-scene">'+groups.join('')+'</g><script><![CDATA['+runtime+']]></script></svg>';
+  const runtime="(()=>{const D="+json+",svg=document.currentScript.ownerDocument.documentElement,scene=svg.querySelector('#motion-scene'),groups=[...svg.querySelectorAll('[id^=fidelity-state-]')];let started=performance.now(),paused=false,manual=false,lastMode='',lastFrom=-1,lastTo=-1;const clamp=v=>Math.max(0,Math.min(1,v));const smooth=p=>p*p*p*(p*(p*6-15)+10);function showOnly(index){if(lastMode==='hold'&&lastFrom===index)return;for(let i=0;i<groups.length;i++){const active=i===index;groups[i].style.opacity=active?'1':'0';groups[i].setAttribute('visibility',active?'visible':'hidden')}if(groups[index]&&scene.lastElementChild!==groups[index])scene.appendChild(groups[index]);lastMode='hold';lastFrom=index;lastTo=-1}function blend(from,to,progress){if(!groups[from]||!groups[to])return;const changed=lastMode!=='blend'||lastFrom!==from||lastTo!==to;if(changed){for(let i=0;i<groups.length;i++){const active=i===from||i===to;groups[i].setAttribute('visibility',active?'visible':'hidden');groups[i].style.opacity=i===from?'1':'0'}scene.appendChild(groups[from]);scene.appendChild(groups[to]);lastMode='blend';lastFrom=from;lastTo=to}groups[from].style.opacity='1';groups[to].style.opacity=String(smooth(clamp(progress)))}function render(t){if(!groups.length)return;const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:Math.max(0,Math.min(total,t));let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}if(segment){blend(segment.from,segment.to,(t-segment.start)/Math.max(.001,segment.end-segment.start))}else showOnly(active)}function tick(now){if(!paused&&!manual)render((now-started)/1000);requestAnimationFrame(tick)}svg.__motionController={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;started=performance.now()},pause(){paused=true},restart(){manual=false;paused=false;started=performance.now();render(0)}};render(0);requestAnimationFrame(tick)})()";
+  report.renderMode='fidelity-stable-crossfade';report.semanticTracks=0;report.pathMorphs=0;
+  return '<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" data-render-mode="fidelity-stable-crossfade" data-duration="'+S.round(schedule.totalDuration)+'" data-infinite="'+schedule.infinite+'"><g id="motion-scene" style="isolation:isolate">'+groups.join('')+'</g><script><![CDATA['+runtime+']]></script></svg>';
 };
 S.buildSnapshotSvg=S.buildFidelitySvg;
 S.buildHtml=function(svg,schedule){
