@@ -4,11 +4,11 @@ window.__compilerReady = (async function () {
       const script = document.createElement('script');
       script.src = src;
       script.onload = resolve;
-      script.onerror = () => reject(new Error(`Không tải được ${src}`));
+      script.onerror = () => reject(new Error('Không tải được ' + src));
       document.head.appendChild(script);
     });
   }
-  for (let index = 1; index <= 8; index += 1) {
-    await loadScript(`semantic-${index}.js`);
+  for (let index = 1; index <= 9; index += 1) {
+    await loadScript('semantic-' + index + '.js');
   }
 })();
