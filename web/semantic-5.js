@@ -6,7 +6,7 @@ S.renderVectorTrack=function(track,stateIds,schedule,defs,report){
   if(!first)return '';
   const paths=S.valueSequence(layers,function(layer){return layer.vectorPaths&&layer.vectorPaths[0]&&layer.vectorPaths[0].data||null},'');
   if(!paths[0])return null;
-  const opacity=S.valueSequence(layers,function(layer){return layer.visible===false?0:S.num(layer.opacity,1)},0);
+  const opacity=layers.map(function(layer){return layer&&layer.visible!==false?S.num(layer.opacity,1):0});
   const paint=S.paintMarkup(S.firstPaint(first.fills),'fill-'+track.id,S.bounds(first));
   if(paint.defs)defs.push(paint.defs);
   const stroke=S.stroke(first),opacityAnim=S.animate('opacity',S.timeline(opacity,schedule),schedule);
@@ -22,7 +22,7 @@ S.renderVectorTrack=function(track,stateIds,schedule,defs,report){
 };
 S.renderTextTrack=function(track,stateIds,schedule,defs,report){
   const layers=S.layerSequence(track,stateIds),first=layers.find(Boolean);if(!first)return '';
-  const xs=S.valueSequence(layers,l=>S.bounds(l).x,0),ys=S.valueSequence(layers,l=>S.bounds(l).y+S.num(l.text&&l.text.fontSize,16),16),opacity=S.valueSequence(layers,l=>l.visible===false?0:S.num(l.opacity,1),0),sizes=S.valueSequence(layers,l=>S.num(l.text&&l.text.fontSize,16),16),content=first.text&&first.text.characters||first.name||'',paint=S.paintMarkup(S.firstPaint(first.fills),'fill-'+track.id,S.bounds(first));
+  const xs=S.valueSequence(layers,l=>S.bounds(l).x,0),ys=S.valueSequence(layers,l=>S.bounds(l).y+S.num(l.text&&l.text.fontSize,16),16),opacity=layers.map(function(layer){return layer&&layer.visible!==false?S.num(layer.opacity,1):0}),sizes=S.valueSequence(layers,l=>S.num(l.text&&l.text.fontSize,16),16),content=first.text&&first.text.characters||first.name||'',paint=S.paintMarkup(S.firstPaint(first.fills),'fill-'+track.id,S.bounds(first));
   if(paint.defs)defs.push(paint.defs);report.semanticTracks+=1;
   return '<text id="'+track.id+'" x="'+S.round(xs[0])+'" y="'+S.round(ys[0])+'" font-size="'+S.round(sizes[0])+'" fill="'+paint.fill+'" opacity="'+S.round(opacity[0])+'">'+S.esc(content)+S.animate('x',S.timeline(xs,schedule),schedule)+S.animate('y',S.timeline(ys,schedule),schedule)+S.animate('font-size',S.timeline(sizes,schedule),schedule)+S.animate('opacity',S.timeline(opacity,schedule),schedule)+'</text>';
 };
