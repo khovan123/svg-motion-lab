@@ -1,1 +1,44 @@
-(function(root){'use strict';const S=root.__SMC;S.layerIdentity=function(layer){if(layer.pluginKey)return 'plugin:'+layer.pluginKey;if(layer.semanticPath)return 'path:'+layer.semanticPath;if(layer.key)return 'key:'+layer.key;return 'fallback:'+S.normalize(layer.name)+'|'+String(layer.type||'')+'|'+S.num(layer.siblingIndex,0)};S.similarity=function(a,b){let score=0;if(a.type===b.type)score+=42;if(S.normalize(a.name)===S.normalize(b.name))score+=35;if(S.num(a.siblingIndex)===S.num(b.siblingIndex))score+=7;const x=a.bounds||{},y=b.bounds||{};const size=Math.max(1,S.num(x.width)+S.num(x.height)+S.num(y.width)+S.num(y.height));const delta=Math.abs(S.num(x.x)-S.num(y.x))+Math.abs(S.num(x.y)-S.num(y.y))+Math.abs(S.num(x.width)-S.num(y.width))+Math.abs(S.num(x.height)-S.num(y.height));return score+Math.max(0,16-(delta/size)*16)};S.matchLayers=function(states){const tracks=[],byIdentity=new Map();states.forEach(function(state,stateIndex){const used=new Set();(state.layers||[]).filter(function(layer){return layer&&layer.parentKey!=null}).forEach(function(layer){const identity=S.layerIdentity(layer);let track=byIdentity.get(identity);if(!track&&stateIndex>0){let best=null,bestScore=72;for(const candidate of tracks){if(candidate.states.has(state.id)||used.has(candidate)||!candidate.lastLayer)continue;const score=S.similarity(candidate.lastLayer,layer);if(score>bestScore){bestScore=score;best=candidate}}track=best}if(!track){track={id:'track-'+tracks.length,identity:identity,type:layer.type,name:layer.name,states:new Map(),lastLayer:null,order:tracks.length};tracks.push(track);if(!byIdentity.has(identity))byIdentity.set(identity,track)}track.states.set(state.id,layer);track.lastLayer=layer;used.add(track)})});return tracks};S.pathSignature=function(path){const source=String(path||'');let commands='';for(let i=0;i<source.length;i++){const code=source.charCodeAt(i);if((code>=65&&code<=90)||(code>=97&&code<=122))commands+=source[i]}return commands};S.compatiblePaths=function(a,b){return S.pathSignature(a)===S.pathSignature(b)&&String(a||'').length===String(b||'').length};S.trackSupported=function(track){return ['RECTANGLE','ELLIPSE','VECTOR','BOOLEAN_OPERATION','LINE','TEXT'].includes(track.type)}})(window);
+(function(root){
+'use strict';
+const S=root.__SMC;
+S.baseName=function(value){return S.normalize(String(value||'').replace(/_\d+$/,''))};
+S.buildLayerSlots=function(state){
+  const layers=state.layers||[],byKey=new Map(),slotByKey=new Map(),children=new Map();
+  layers.forEach(layer=>{if(layer&&layer.key)byKey.set(layer.key,layer)});
+  function parentSlot(layer){
+    if(!layer.parentKey)return '@root';
+    if(slotByKey.has(layer.parentKey))return slotByKey.get(layer.parentKey);
+    const parent=byKey.get(layer.parentKey);
+    return parent?slotFor(parent):'@root';
+  }
+  function slotFor(layer){
+    if(slotByKey.has(layer.key))return slotByKey.get(layer.key);
+    if(!layer.parentKey){slotByKey.set(layer.key,'@root');return '@root'}
+    const parent=parentSlot(layer),base=S.baseName(layer.name),groupKey=parent+'|'+base+'|'+String(layer.type||'');
+    if(!children.has(groupKey))children.set(groupKey,[]);
+    const list=children.get(groupKey);
+    let ordinal=list.indexOf(layer);
+    if(ordinal<0){list.push(layer);ordinal=list.length-1}
+    const slot=parent+'/'+base+':'+String(layer.type||'')+'['+ordinal+']';
+    slotByKey.set(layer.key,slot);return slot;
+  }
+  layers.forEach(slotFor);
+  return new Map(layers.filter(Boolean).map(layer=>[layer,slotFor(layer)]));
+};
+S.matchLayers=function(states){
+  const tracks=[],bySlot=new Map();
+  states.forEach(function(state){
+    const slots=S.buildLayerSlots(state);
+    (state.layers||[]).filter(layer=>layer&&layer.parentKey!=null).forEach(function(layer){
+      const slot=slots.get(layer);
+      let track=bySlot.get(slot);
+      if(!track){track={id:'track-'+tracks.length,slot:slot,type:layer.type,name:layer.name,states:new Map(),order:tracks.length};tracks.push(track);bySlot.set(slot,track)}
+      track.states.set(state.id,layer);
+    });
+  });
+  return tracks;
+};
+S.pathSignature=function(path){const source=String(path||'');let commands='';for(let i=0;i<source.length;i++){const code=source.charCodeAt(i);if((code>=65&&code<=90)||(code>=97&&code<=122))commands+=source[i]}return commands};
+S.compatiblePaths=function(a,b){return S.pathSignature(a)===S.pathSignature(b)&&String(a||'').length===String(b||'').length};
+S.trackSupported=function(track){return ['RECTANGLE','ELLIPSE','VECTOR','BOOLEAN_OPERATION','LINE','TEXT'].includes(track.type)};
+})(window);
