@@ -4,66 +4,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SVG Motion Prototype Exporter</title>
 <style>
-  :root{font:13px/1.45 Inter,system-ui,sans-serif;color:var(--figma-color-text,#1f2328);background:var(--figma-color-bg,#fff)}
-  *{box-sizing:border-box}body{margin:0;padding:16px}.stack{display:grid;gap:12px}.card{padding:12px;border:1px solid var(--figma-color-border,#ddd);border-radius:10px}.row{display:flex;gap:8px;align-items:center}.muted{color:var(--figma-color-text-secondary,#666)}.badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--figma-color-bg-secondary,#eef1f8);font-size:11px;font-weight:700}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--figma-color-bg-brand,#0d99ff);color:#fff;font:inherit;font-weight:650;cursor:pointer}button[disabled]{opacity:.5;cursor:default}input[type=checkbox]{accent-color:var(--figma-color-bg-brand,#0d99ff)}code{font-size:12px}#status{min-height:58px;white-space:pre-wrap}
+:root{font:13px/1.45 Inter,system-ui,sans-serif;color:var(--figma-color-text,#1f2328);background:var(--figma-color-bg,#fff)}*{box-sizing:border-box}body{margin:0;padding:16px}.stack{display:grid;gap:12px}.card{padding:12px;border:1px solid var(--figma-color-border,#ddd);border-radius:10px}.row{display:flex;gap:8px;align-items:center}.muted{color:var(--figma-color-text-secondary,#666)}.badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--figma-color-bg-secondary,#eef1f8);font-size:11px;font-weight:700}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--figma-color-bg-brand,#0d99ff);color:#fff;font:inherit;font-weight:650;cursor:pointer}button[disabled]{opacity:.5;cursor:default}input[type=checkbox]{accent-color:var(--figma-color-bg-brand,#0d99ff)}#status{min-height:70px;white-space:pre-wrap}
 </style>
-<body>
-<div class="stack">
-  <div>
-    <div class="row"><strong>SVG Motion Prototype Exporter</strong><span class="badge">fidelity metadata v2</span></div>
-    <div class="muted">Export stable node IDs, mask/clip/filter hierarchy, vector topology và gradient transform.</div>
-  </div>
-  <div class="card stack">
-    <label class="row"><input id="includeHidden" type="checkbox" checked> Bao gồm layer ẩn</label>
-    <label class="row"><input type="checkbox" checked disabled> Luôn kèm SVG snapshot của mọi state</label>
-    <div class="muted">Metadata nâng cao được dùng để dựng Smart Animate chính xác hơn giữa các variant.</div>
-  </div>
-  <button id="export" disabled>Đang khởi tạo exporter…</button>
-  <div id="status" class="card muted">Đang nạp runtime metadata…</div>
+<body><div class="stack">
+<div><div class="row"><strong>SVG Motion Prototype Exporter</strong><span class="badge">fidelity metadata v2</span></div><div class="muted">Export stable node IDs, mask/clip/filter hierarchy, vector topology và gradient transform.</div></div>
+<div class="card stack"><label class="row"><input id="includeHidden" type="checkbox" checked> Bao gồm layer ẩn</label><label class="row"><input type="checkbox" checked disabled> Luôn kèm SVG snapshot của mọi state</label><div class="muted">Metadata nâng cao được dùng để dựng Smart Animate chính xác hơn giữa các variant.</div></div>
+<button id="export" disabled>Đang khởi tạo exporter…</button><div id="status" class="card muted">Đang nạp runtime metadata…</div>
 </div>
-<script src="exporter-chunk-1.js"></script>
-<script src="exporter-chunk-2.js"></script>
-<script src="exporter-chunk-3.js"></script>
-<script src="exporter-chunk-4.js"></script>
-<script src="exporter-chunk-5.js"></script>
-<script src="exporter-chunk-6.js"></script>
-<script src="exporter-chunk-7a.js"></script>
-<script src="exporter-chunk-7b.js"></script>
+<script src="exporter-chunk-1.js"></script><script src="exporter-chunk-2.js"></script><script src="exporter-chunk-3.js"></script><script src="exporter-chunk-4.js"></script><script src="exporter-chunk-5.js"></script><script src="exporter-chunk-6.js"></script><script src="exporter-chunk-7a.js"></script><script src="exporter-chunk-7b.js"></script>
 <script>
-const button=document.querySelector('#export');
-const status=document.querySelector('#status');
-let ready=false;
-function decodeBase64Utf8(value){
-  const binary=atob(value),bytes=new Uint8Array(binary.length);
-  for(let index=0;index<binary.length;index+=1)bytes[index]=binary.charCodeAt(index);
-  return new TextDecoder().decode(bytes);
+const button=document.querySelector('#export'),status=document.querySelector('#status');let ready=false,timer=null;
+function decodeBase64Utf8(value){const binary=atob(value),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new TextDecoder().decode(bytes)}
+function patchRuntime(source){
+  source=source.replace('await figma.loadAllPagesAsync();','figma.ui.postMessage({type:"progress",message:"Bước 1/4 · Đang đọc selection trên current page…"});');
+  source=source.replace("const selected=figma.currentPage.selection.filter(isState)","figma.ui.postMessage({type:'progress',message:'Bước 2/4 · Đang xác định state cần export…'});const selected=figma.currentPage.selection.filter(isState)");
+  source=source.replace("walk(root,null,'@root'","figma.ui.postMessage({type:'progress',message:'Bước 3/4 · Đang quét layer '+(i+1)+'/'+roots.length+': '+root.name});walk(root,null,'@root'");
+  source=source.replace("svg:options.includeStateSvg?await exportSvg(root):null","svg:options.includeStateSvg?(figma.ui.postMessage({type:'progress',message:'Bước 4/4 · Đang render SVG '+(i+1)+'/'+roots.length+': '+root.name}),await exportSvg(root)):null");
+  return source;
 }
-try{
-  const source=decodeBase64Utf8((window.__exporterChunks||[]).join(''));
-  parent.postMessage({pluginMessage:{type:'install-exporter',source}},'*');
-}catch(error){status.textContent='Khởi tạo exporter lỗi: '+error.message}
-button.onclick=()=>{
-  if(!ready)return;
-  button.disabled=true;
-  status.textContent='Đang đọc stable IDs, mask, clip, filter, vector topology, gradient transform và SVG snapshot…';
-  parent.postMessage({pluginMessage:{type:'export',options:{includeHidden:document.querySelector('#includeHidden').checked,includeStateSvg:true}}},'*');
-};
-onmessage=event=>{
-  const msg=event.data.pluginMessage||{};
-  if(msg.type==='ready'){
-    ready=true;button.disabled=false;button.textContent='Export prototype manifest v3';status.textContent='Sẵn sàng · fidelity metadata v2';return;
-  }
-  if(msg.type==='error'){button.disabled=!ready;status.textContent='Lỗi: '+msg.message;return}
-  if(msg.type==='progress'){status.textContent=msg.message;return}
-  if(msg.type==='manifest'){
-    const json=JSON.stringify(msg.manifest,null,2),url=URL.createObjectURL(new Blob([json],{type:'application/json'})),a=document.createElement('a');
-    a.href=url;a.download='motion-manifest.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-    button.disabled=false;
-    const reactionCount=msg.manifest.prototype&&msg.manifest.prototype.reactions?msg.manifest.prototype.reactions.length:0;
-    const snapshotCount=msg.manifest.states.filter(state=>Boolean(state.svg)).length;
-    status.textContent='Đã export '+msg.manifest.schema+'\n'+msg.manifest.states.length+' state · '+reactionCount+' reaction · '+snapshotCount+' SVG snapshot · metadata v'+msg.manifest.fidelityMetadataVersion+'.';
-  }
-};
-</script>
-</body>
-</html>
+try{const chunks=window.__exporterChunks||[];if(chunks.length!==8)throw new Error('Thiếu runtime chunk: '+chunks.length+'/8');const source=patchRuntime(decodeBase64Utf8(chunks.join('')));parent.postMessage({pluginMessage:{type:'install-exporter',source}},'*')}catch(error){status.textContent='Khởi tạo exporter lỗi: '+error.message}
+function armWatchdog(){clearTimeout(timer);timer=setTimeout(()=>{status.textContent+='\nĐang chậm tại bước này. Thường do state có nhiều vector, mask, blur hoặc filter.'},15000)}
+button.onclick=()=>{if(!ready)return;button.disabled=true;status.textContent='Bước 1/4 · Đang đọc selection trên current page…';armWatchdog();parent.postMessage({pluginMessage:{type:'export',options:{includeHidden:document.querySelector('#includeHidden').checked,includeStateSvg:true}}},'*')};
+onmessage=event=>{const msg=event.data.pluginMessage||{};if(msg.type==='ready'){ready=true;button.disabled=false;button.textContent='Export prototype manifest v3';status.textContent='Sẵn sàng · fidelity metadata v2';return}if(msg.type==='error'){clearTimeout(timer);button.disabled=!ready;status.textContent='Lỗi: '+msg.message;return}if(msg.type==='progress'){status.textContent=msg.message;armWatchdog();return}if(msg.type==='manifest'){clearTimeout(timer);const json=JSON.stringify(msg.manifest,null,2),url=URL.createObjectURL(new Blob([json],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='motion-manifest.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);button.disabled=false;const reactions=msg.manifest.prototype&&msg.manifest.prototype.reactions?msg.manifest.prototype.reactions.length:0,snapshots=msg.manifest.states.filter(state=>Boolean(state.svg)).length;status.textContent='Đã export '+msg.manifest.schema+'\n'+msg.manifest.states.length+' state · '+reactions+' reaction · '+snapshots+' SVG snapshot · metadata v'+msg.manifest.fidelityMetadataVersion+'.'}};
+</script></body></html>
