@@ -5,26 +5,65 @@
 <title>SVG Motion Prototype Exporter</title>
 <style>
   :root{font:13px/1.45 Inter,system-ui,sans-serif;color:var(--figma-color-text,#1f2328);background:var(--figma-color-bg,#fff)}
-  *{box-sizing:border-box}body{margin:0;padding:16px}.stack{display:grid;gap:12px}.card{padding:12px;border:1px solid var(--figma-color-border,#ddd);border-radius:10px}.row{display:flex;gap:8px;align-items:center}.muted{color:var(--figma-color-text-secondary,#666)}.badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--figma-color-bg-secondary,#eef1f8);font-size:11px;font-weight:700}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--figma-color-bg-brand,#0d99ff);color:#fff;font:inherit;font-weight:650;cursor:pointer}button[disabled]{opacity:.5;cursor:default}input[type=checkbox]{accent-color:var(--figma-color-bg-brand,#0d99ff)}code{font-size:12px}#status{min-height:52px;white-space:pre-wrap}
+  *{box-sizing:border-box}body{margin:0;padding:16px}.stack{display:grid;gap:12px}.card{padding:12px;border:1px solid var(--figma-color-border,#ddd);border-radius:10px}.row{display:flex;gap:8px;align-items:center}.muted{color:var(--figma-color-text-secondary,#666)}.badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--figma-color-bg-secondary,#eef1f8);font-size:11px;font-weight:700}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--figma-color-bg-brand,#0d99ff);color:#fff;font:inherit;font-weight:650;cursor:pointer}button[disabled]{opacity:.5;cursor:default}input[type=checkbox]{accent-color:var(--figma-color-bg-brand,#0d99ff)}code{font-size:12px}#status{min-height:58px;white-space:pre-wrap}
 </style>
 <body>
 <div class="stack">
   <div>
-    <div class="row"><strong>SVG Motion Prototype Exporter</strong><span class="badge">schema v3</span></div>
-    <div class="muted">Prototype graph là nguồn timing/action; SVG snapshot là nguồn hình ảnh.</div>
+    <div class="row"><strong>SVG Motion Prototype Exporter</strong><span class="badge">fidelity metadata v2</span></div>
+    <div class="muted">Export stable node IDs, mask/clip/filter hierarchy, vector topology và gradient transform.</div>
   </div>
   <div class="card stack">
-    <label class="row"><input id="includeHidden" type="checkbox"> Bao gồm layer ẩn</label>
+    <label class="row"><input id="includeHidden" type="checkbox" checked> Bao gồm layer ẩn</label>
     <label class="row"><input type="checkbox" checked disabled> Luôn kèm SVG snapshot của mọi state</label>
-    <div class="muted">Snapshot là bắt buộc để giữ mask, filter, clip-path và group phức tạp.</div>
+    <div class="muted">Metadata nâng cao được dùng để dựng Smart Animate chính xác hơn giữa các variant.</div>
   </div>
-  <button id="export">Export prototype manifest v3</button>
-  <div id="status" class="card muted">Sẵn sàng. Entry: <code>prototype-code.js</code></div>
+  <button id="export" disabled>Đang khởi tạo exporter…</button>
+  <div id="status" class="card muted">Đang nạp runtime metadata…</div>
 </div>
+<script src="exporter-chunk-1.js"></script>
+<script src="exporter-chunk-2.js"></script>
+<script src="exporter-chunk-3.js"></script>
+<script src="exporter-chunk-4.js"></script>
+<script src="exporter-chunk-5.js"></script>
+<script src="exporter-chunk-6.js"></script>
+<script src="exporter-chunk-7a.js"></script>
+<script src="exporter-chunk-7b.js"></script>
 <script>
-const button=document.querySelector('#export');const status=document.querySelector('#status');
-button.onclick=()=>{button.disabled=true;status.textContent='Đang đọc full prototype graph, variables và SVG snapshot…';parent.postMessage({pluginMessage:{type:'export',options:{includeHidden:document.querySelector('#includeHidden').checked,includeStateSvg:true}}},'*')};
-onmessage=(event)=>{const msg=event.data.pluginMessage||{};if(msg.type==='error'){button.disabled=false;status.textContent='Lỗi: '+msg.message;return}if(msg.type==='progress'){status.textContent=msg.message;return}if(msg.type==='manifest'){const json=JSON.stringify(msg.manifest,null,2);const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='motion-manifest.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);button.disabled=false;const reactionCount=msg.manifest.prototype&&msg.manifest.prototype.reactions?msg.manifest.prototype.reactions.length:0;const snapshotCount=msg.manifest.states.filter(state=>Boolean(state.svg)).length;status.textContent='Đã export '+msg.manifest.schema+'\n'+msg.manifest.states.length+' state · '+reactionCount+' reaction · '+snapshotCount+' SVG snapshot.'}}
+const button=document.querySelector('#export');
+const status=document.querySelector('#status');
+let ready=false;
+function decodeBase64Utf8(value){
+  const binary=atob(value),bytes=new Uint8Array(binary.length);
+  for(let index=0;index<binary.length;index+=1)bytes[index]=binary.charCodeAt(index);
+  return new TextDecoder().decode(bytes);
+}
+try{
+  const source=decodeBase64Utf8((window.__exporterChunks||[]).join(''));
+  parent.postMessage({pluginMessage:{type:'install-exporter',source}},'*');
+}catch(error){status.textContent='Khởi tạo exporter lỗi: '+error.message}
+button.onclick=()=>{
+  if(!ready)return;
+  button.disabled=true;
+  status.textContent='Đang đọc stable IDs, mask, clip, filter, vector topology, gradient transform và SVG snapshot…';
+  parent.postMessage({pluginMessage:{type:'export',options:{includeHidden:document.querySelector('#includeHidden').checked,includeStateSvg:true}}},'*');
+};
+onmessage=event=>{
+  const msg=event.data.pluginMessage||{};
+  if(msg.type==='ready'){
+    ready=true;button.disabled=false;button.textContent='Export prototype manifest v3';status.textContent='Sẵn sàng · fidelity metadata v2';return;
+  }
+  if(msg.type==='error'){button.disabled=!ready;status.textContent='Lỗi: '+msg.message;return}
+  if(msg.type==='progress'){status.textContent=msg.message;return}
+  if(msg.type==='manifest'){
+    const json=JSON.stringify(msg.manifest,null,2),url=URL.createObjectURL(new Blob([json],{type:'application/json'})),a=document.createElement('a');
+    a.href=url;a.download='motion-manifest.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    button.disabled=false;
+    const reactionCount=msg.manifest.prototype&&msg.manifest.prototype.reactions?msg.manifest.prototype.reactions.length:0;
+    const snapshotCount=msg.manifest.states.filter(state=>Boolean(state.svg)).length;
+    status.textContent='Đã export '+msg.manifest.schema+'\n'+msg.manifest.states.length+' state · '+reactionCount+' reaction · '+snapshotCount+' SVG snapshot · metadata v'+msg.manifest.fidelityMetadataVersion+'.';
+  }
+};
 </script>
 </body>
 </html>
