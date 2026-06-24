@@ -7,7 +7,7 @@ figma.ui.onmessage = async message => {
   if (message && message.type === "install-exporter") {
     try {
       (0, eval)(message.source);
-      exporterHandler = globalThis.__exporterHandler;
+      exporterHandler = (0, eval)("globalThis.__exporterHandler");
       if (typeof exporterHandler !== "function") throw new Error("Exporter runtime không hợp lệ.");
       figma.ui.onmessage = exporterHandler;
       figma.ui.postMessage({ type: "ready" });
