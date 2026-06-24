@@ -1,9 +1,12 @@
 {
   "name": "SVG Motion Manifest Exporter",
-  "id": "svg-motion-manifest-exporter-dev",
+  "id": "1651237599678326887",
   "api": "1.0.0",
-  "main": "code.js",
+  "main": "prototype-code.js",
   "ui": "ui.html",
   "editorType": ["figma"],
-  "documentAccess": "dynamic-page"
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
 }

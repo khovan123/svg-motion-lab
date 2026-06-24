@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "startStateId": "1:4218",
+  "stateOrder": [
+    "1:4218",
+    "1:4182",
+    "1:4254",
+    "1:4439",
+    "1:4291",
+    "1:4328",
+    "1:4365",
+    "1:4402"
+  ],
+  "flowStartingPoints": [
+    {
+      "nodeId": "15:924",
+      "stateId": null,
+      "name": "Flow 6"
+    },
+    {
+      "nodeId": "15:960",
+      "stateId": null,
+      "name": "Flow 4"
+    },
+    {
+      "nodeId": "15:1000",
+      "stateId": null,
+      "name": "Flow 8"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "1:4218:0",
+      "sourceStateId": "1:4218",
+      "sourceNodeId": "1:4218",
+      "sourceNodeName": "Property 1=1st",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4182",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4182"
+        }
+      ]
+    },
+    {
+      "id": "1:4182:1",
+      "sourceStateId": "1:4182",
+      "sourceNodeId": "1:4182",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.800000011920929
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4254",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4254"
+        }
+      ]
+    },
+    {
+      "id": "1:4254:2",
+      "sourceStateId": "1:4254",
+      "sourceNodeId": "1:4254",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4439",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4439"
+        }
+      ]
+    },
+    {
+      "id": "1:4439:3",
+      "sourceStateId": "1:4439",
+      "sourceNodeId": "1:4439",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4291",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4291"
+        }
+      ]
+    },
+    {
+      "id": "1:4291:4",
+      "sourceStateId": "1:4291",
+      "sourceNodeId": "1:4291",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4328",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4328"
+        }
+      ]
+    },
+    {
+      "id": "1:4328:5",
+      "sourceStateId": "1:4328",
+      "sourceNodeId": "1:4328",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4365",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4365"
+        }
+      ]
+    },
+    {
+      "id": "1:4365:6",
+      "sourceStateId": "1:4365",
+      "sourceNodeId": "1:4365",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.8
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4402",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "SMART_ANIMATE",
+            "easing": {
+              "type": "EASE_IN_AND_OUT"
+            },
+            "duration": 0.800000011920929
+          },
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4402"
+        }
+      ]
+    },
+    {
+      "id": "1:4402:7",
+      "sourceStateId": "1:4402",
+      "sourceNodeId": "1:4402",
+      "sourceNodeName": "Property 1=Default",
+      "sourceLayerKey": "@root",
+      "sourceBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 354.66666,
+        "height": 240
+      },
+      "trigger": {
+        "type": "AFTER_TIMEOUT",
+        "timeout": 0.800000011920929
+      },
+      "actions": [
+        {
+          "type": "NODE",
+          "destinationId": "1:4218",
+          "navigation": "CHANGE_TO",
+          "transition": null,
+          "resetVideoPosition": false,
+          "destinationStateId": "1:4218"
+        }
+      ]
+    }
+  ],
+  "variables": [],
+  "variableCollections": [],
+  "unsupportedActions": []
+}
