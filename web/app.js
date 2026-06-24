@@ -4,13 +4,13 @@ window.__compilerReady.then(async function () {
       const script = document.createElement('script');
       script.src = src;
       script.onload = resolve;
-      script.onerror = () => reject(new Error(`Không tải được ${src}`));
+      script.onerror = () => reject(new Error('Không tải được ' + src));
       document.head.appendChild(script);
     });
   }
   await loadScript('app-core.js');
-  await loadScript('app-actions.js');
+  await loadScript('app-actions-hybrid.js');
 }).catch(function (error) {
   const status = document.querySelector('#status');
-  if (status) status.textContent = `Khởi tạo ứng dụng lỗi: ${error.message}`;
+  if (status) status.textContent = 'Khởi tạo ứng dụng lỗi: ' + error.message;
 });
