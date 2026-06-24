@@ -5,9 +5,7 @@ S.buildSemanticSvg=function(manifest,schedule){
   const byId=new Map(manifest.states.map(s=>[s.id,s]));
   const states=schedule.stateIds.map(id=>byId.get(id)).filter(Boolean);
   const first=states[0]||manifest.states[0];
-  const allTracks=S.matchLayers(states);
-  const tracks=allTracks.filter(S.trackSupported);
-  const defs=[];
+  const allTracks=S.matchLayers(states),tracks=allTracks.filter(S.trackSupported),defs=[];
   const report={renderMode:'semantic',tracks:tracks.length,allTracks:allTracks.length,semanticTracks:0,pathMorphs:0,unsupportedTracks:0};
   let body='';
   for(const track of tracks){
@@ -18,21 +16,22 @@ S.buildSemanticSvg=function(manifest,schedule){
     if(markup)body+=markup;else report.unsupportedTracks+=1;
   }
   const ratio=tracks.length?report.semanticTracks/tracks.length:0;
-  if(report.semanticTracks<3||ratio<.45)return {svg:null,report};
-  const svg='<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" data-render-mode="semantic" data-duration="'+S.round(schedule.totalDuration)+'" data-infinite="'+schedule.infinite+'"><defs>'+defs.join('')+'</defs><g id="motion-scene">'+body+'</g></svg>';
-  return {svg,report};
+  if(report.semanticTracks<3||ratio<.7)return {svg:null,report};
+  return {svg:'<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" data-render-mode="semantic" data-duration="'+S.round(schedule.totalDuration)+'" data-infinite="'+schedule.infinite+'"><defs>'+defs.join('')+'</defs><g id="motion-scene">'+body+'</g></svg>',report};
 };
 S.utf8Base64=function(text){const bytes=new TextEncoder().encode(text);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary)};
 S.dataUri=svg=>'data:image/svg+xml;base64,'+S.utf8Base64(svg);
-S.buildSnapshotSvg=function(manifest,schedule,report){
+S.requiresFidelity=function(manifest){return manifest.states.some(state=>/<(?:mask|clipPath|filter|fe[A-Z])/i.test(state.svg||''))};
+S.buildFidelitySvg=function(manifest,schedule,report){
   const byId=new Map(manifest.states.map(s=>[s.id,s])),states=schedule.stateIds.map(id=>byId.get(id)).filter(Boolean),first=states[0]||manifest.states[0],groups=[];
   states.forEach(function(state,index){
-    const values=states.map((_,i)=>i===index?1:0);if(schedule.looped)values.push(index===0?1:0);
-    groups.push('<g opacity="'+(index===0?1:0)+'"><image x="0" y="0" width="'+S.round(state.width)+'" height="'+S.round(state.height)+'" href="'+S.dataUri(state.svg)+'"/>'+S.animate('opacity',S.timeline(values,schedule),schedule)+'</g>');
+    const values=states.map((_,i)=>i===index?1:0);
+    groups.push('<g id="fidelity-state-'+index+'" opacity="'+(index===0?1:0)+'"><image x="0" y="0" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" preserveAspectRatio="none" href="'+S.dataUri(state.svg)+'"/>'+S.animate('opacity',S.timeline(values,schedule),schedule)+'</g>');
   });
-  report.renderMode='snapshot';
-  return '<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" data-render-mode="snapshot"><g id="motion-scene">'+groups.join('')+'</g></svg>';
+  report.renderMode='fidelity-compositor';report.semanticTracks=0;report.pathMorphs=0;
+  return '<?xml version="1.0" encoding="UTF-8"?><svg id="motion-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+S.round(first.width)+' '+S.round(first.height)+'" width="'+S.round(first.width)+'" height="'+S.round(first.height)+'" data-render-mode="fidelity-compositor" data-duration="'+S.round(schedule.totalDuration)+'" data-infinite="'+schedule.infinite+'"><g id="motion-scene">'+groups.join('')+'</g></svg>';
 };
+S.buildSnapshotSvg=S.buildFidelitySvg;
 S.buildHtml=function(svg,schedule){
   const data=JSON.stringify({duration:schedule.totalDuration,infinite:schedule.infinite}).replace(/</g,'\\u003c');
   const runtime="(()=>{const D="+data+",svg=document.querySelector('#motion-svg'),status=document.querySelector('#status');let start=performance.now(),paused=false,pauseAt=0,raf=0;function tick(now){if(!paused){const elapsed=(now-start)/1000,t=D.infinite?elapsed%D.duration:Math.min(elapsed,D.duration);if(svg&&svg.setCurrentTime)svg.setCurrentTime(t);status.textContent=(D.infinite?'Infinite':'Play once')+' · '+t.toFixed(2)+' / '+D.duration.toFixed(2)+'s';if(D.infinite||elapsed<D.duration)raf=requestAnimationFrame(tick)}else raf=requestAnimationFrame(tick)}document.querySelector('#restart').onclick=()=>{cancelAnimationFrame(raf);start=performance.now();paused=false;raf=requestAnimationFrame(tick)};document.querySelector('#pause').onclick=()=>{paused=!paused;if(paused)pauseAt=performance.now();else start+=performance.now()-pauseAt};if(svg&&svg.pauseAnimations)svg.pauseAnimations();raf=requestAnimationFrame(tick)})()";
