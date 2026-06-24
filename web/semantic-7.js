@@ -1,1 +1,33 @@
-(function(root){'use strict';const S=root.__SMC;function ir(m,s,r){return{version:2,startStateId:s.stateIds[0],stateOrder:s.stateIds.slice(),flowStartingPoints:m.prototype.flowStartingPoints||[],reactions:m.prototype.reactions||[],variables:m.prototype.variables||[],variableCollections:m.prototype.variableCollections||[],playback:{infinite:s.infinite,totalDuration:s.totalDuration,segments:s.segments.map(x=>({from:x.from,to:x.to,hold:x.hold,duration:x.duration}))},semantic:r}}function compile(m,o){o=o||{};S.validate(m);const b=o.baseSchedule||S.buildBaseSchedule(m),s=S.customSchedule(b,o.customSegments,o.infinite),sem=S.buildSemanticSvg(m,s),meta=Number(m.fidelityMetadataVersion||0)>=2;let svg=sem.svg;if(!svg)svg=S.buildFidelitySvg(m,s,sem.report);else if(!meta&&S.requiresFidelity(m))svg=S.buildFidelitySvg(m,s,sem.report);const html=S.buildHtml(svg,s),data=ir(m,s,sem.report),report={report:{manifestSchema:m.schema,prototypeReady:true,snapshotsReady:true,renderMode:sem.report.renderMode,semanticTracks:sem.report.semanticTracks,totalTracks:sem.report.tracks,pathMorphs:sem.report.pathMorphs,unsupportedTracks:sem.report.unsupportedTracks,infinite:s.infinite,customDuration:s.totalDuration},schedule:s};return{svg:svg,html:html,ir:data,report:report,schedule:s,semanticReport:sem.report}}root.SvgMotionCompiler={validate:S.validate,buildBaseSchedule:S.buildBaseSchedule,compile:compile}})(window);
+(function(root){
+'use strict';
+const S=root.__SMC;
+function buildIr(manifest,schedule,report){
+  return {
+    version:2,
+    startStateId:schedule.stateIds[0],
+    stateOrder:schedule.stateIds.slice(),
+    flowStartingPoints:manifest.prototype.flowStartingPoints||[],
+    reactions:manifest.prototype.reactions||[],
+    variables:manifest.prototype.variables||[],
+    variableCollections:manifest.prototype.variableCollections||[],
+    playback:{infinite:schedule.infinite,totalDuration:schedule.totalDuration,segments:schedule.segments.map(s=>({from:s.from,to:s.to,hold:s.hold,duration:s.duration}))},
+    semantic:report
+  };
+}
+function compile(manifest,options){
+  options=options||{};
+  S.validate(manifest);
+  const base=options.baseSchedule||S.buildBaseSchedule(manifest);
+  const schedule=S.customSchedule(base,options.customSegments,options.infinite);
+  const semantic=S.buildSemanticSvg(manifest,schedule);
+  const complexScene=S.requiresFidelity(manifest);
+  let svg;
+  if(complexScene||!semantic.svg)svg=S.buildFidelitySvg(manifest,schedule,semantic.report);
+  else svg=semantic.svg;
+  const html=S.buildHtml(svg,schedule);
+  const ir=buildIr(manifest,schedule,semantic.report);
+  const report={report:{manifestSchema:manifest.schema,prototypeReady:true,snapshotsReady:true,renderMode:semantic.report.renderMode,semanticTracks:semantic.report.semanticTracks,totalTracks:semantic.report.tracks,pathMorphs:semantic.report.pathMorphs,unsupportedTracks:semantic.report.unsupportedTracks,infinite:schedule.infinite,customDuration:schedule.totalDuration},schedule:schedule};
+  return {svg:svg,html:html,ir:ir,report:report,schedule:schedule,semanticReport:semantic.report};
+}
+root.SvgMotionCompiler={validate:S.validate,buildBaseSchedule:S.buildBaseSchedule,compile:compile};
+})(window);
