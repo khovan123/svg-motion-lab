@@ -1,0 +1,16 @@
+window.__compilerReady.then(async function () {
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Không tải được ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+  await loadScript('app-core.js');
+  await loadScript('app-actions.js');
+}).catch(function (error) {
+  const status = document.querySelector('#status');
+  if (status) status.textContent = `Khởi tạo ứng dụng lỗi: ${error.message}`;
+});
