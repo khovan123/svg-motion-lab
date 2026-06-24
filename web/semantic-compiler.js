@@ -8,7 +8,7 @@ window.__compilerReady = (async function () {
       document.head.appendChild(script);
     });
   }
-  for (let index = 1; index <= 7; index += 1) {
+  for (let index = 1; index <= 8; index += 1) {
     await loadScript(`semantic-${index}.js`);
   }
 })();
