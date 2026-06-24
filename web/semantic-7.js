@@ -20,8 +20,9 @@ function compile(manifest,options){
   const base=options.baseSchedule||S.buildBaseSchedule(manifest);
   const schedule=S.customSchedule(base,options.customSegments,options.infinite);
   const semantic=S.buildSemanticSvg(manifest,schedule);
-  let svg=semantic.svg;
-  if(!svg)svg=S.buildSnapshotSvg(manifest,schedule,semantic.report);
+  let svg;
+  if(S.requiresFidelity(manifest))svg=S.buildFidelitySvg(manifest,schedule,semantic.report);
+  else svg=semantic.svg||S.buildFidelitySvg(manifest,schedule,semantic.report);
   const html=S.buildHtml(svg,schedule);
   const ir=buildIr(manifest,schedule,semantic.report);
   const report={report:{manifestSchema:manifest.schema,prototypeReady:true,snapshotsReady:true,renderMode:semantic.report.renderMode,semanticTracks:semantic.report.semanticTracks,totalTracks:semantic.report.tracks,pathMorphs:semantic.report.pathMorphs,unsupportedTracks:semantic.report.unsupportedTracks,infinite:schedule.infinite,customDuration:schedule.totalDuration},schedule:schedule};
