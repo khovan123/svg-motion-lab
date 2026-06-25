@@ -51,30 +51,17 @@ window.__compilerReady = (async function () {
 }`;
 
     let patched = source.slice(0, parseStart) + parseReplacement + source.slice(parseEnd);
-
-    const prefixStart = patched.indexOf('function prefixIds(');
-    const prefixEnd = patched.indexOf('\n\nfunction layerMap', prefixStart);
-    if (prefixStart < 0 || prefixEnd < 0) throw new Error('Không tìm thấy hàm prefixIds trong semantic-8.js');
-
-    const prefixReplacement = `function prefixIds(node,prefix){
- const clone=node.cloneNode(true),idMap=new Map();
- const all=[clone,...clone.querySelectorAll('*')];
- all.filter(el=>el.hasAttribute&&el.hasAttribute('id')).forEach(el=>{const old=el.getAttribute('id'),next=prefix+old;idMap.set(old,next);el.setAttribute('id',next)});
- const attrs=['fill','stroke','filter','clip-path','mask','href','xlink:href','style'];
- all.forEach(el=>attrs.forEach(name=>{if(!el.hasAttribute||!el.hasAttribute(name))return;let value=el.getAttribute(name);idMap.forEach((next,old)=>{value=value.split('url(#'+old+')').join('url(#'+next+')').split('#'+old).join('#'+next)});el.setAttribute(name,value)}));
- return clone;
-}`;
-
-    patched = patched.slice(0, prefixStart) + prefixReplacement + patched.slice(prefixEnd);
     patched = patched.replace('parsed=states.map(parseSvg)', 'parsed=states.map(state=>parseSvg(state.svg,state))');
     patched = patched.replace(
       "const activeTracks=tracks.filter(t=>!ancestorFallback(t,fallbackIds,states));",
       "const activeTracks=tracks.filter(t=>{if(String(t.id).endsWith(':@root'))return false;return !ancestorFallback(t,new Set([...fallbackIds].filter(id=>!String(id).endsWith(':@root'))),states)});"
     );
     patched = patched.replace(
-      "const clone=prefixIds(base,'base-');",
-      "const baseStateIndex=nodes.findIndex(Boolean);const clone=prefixIds(base,'s'+Math.max(0,baseStateIndex)+'-');"
+      "parsed.forEach((ps,i)=>{const d=ps.svg.querySelector('defs');if(d){const p=prefixIds(d,'s'+i+'-');defs.push(p.innerHTML)}});",
+      "parsed.forEach(ps=>{const d=ps.svg.querySelector('defs');if(d)defs.push(d.innerHTML)});"
     );
+    patched = patched.replace("const clone=prefixIds(node,'s'+i+'-');", "const clone=node.cloneNode(true);");
+    patched = patched.replace("const clone=prefixIds(base,'base-');", "const clone=base.cloneNode(true);");
     return patched;
   }
 
