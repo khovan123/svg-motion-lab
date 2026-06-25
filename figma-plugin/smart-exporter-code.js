@@ -10,11 +10,33 @@ async function build(options){
   const root=roots[i],box=root.absoluteBoundingBox||{x:root.x||0,y:root.y||0},variant=variantOf(root),layers=[],svgNodeMap=[],ord={};
   figma.ui.postMessage({type:'progress',message:`Đang export ${i+1}/${roots.length}: ${root.name}`});
   walk(root,null,'@root',0,{x:box.x||0,y:box.y||0},variant,layers,svgNodeMap,ord,options);
-  states.push({id:root.id,stableStateId:(variant.componentSetId||root.id)+':'+variant.variantKey,name:root.name,order:i,width:n(root.width),height:n(root.height),variant,layers,svgNodeMap,svg:await svg(root)});
+  const raw=await svg(root),annotated=annotateSvg(raw,svgNodeMap,root.id);
+  states.push({id:root.id,stableStateId:(variant.componentSetId||root.id)+':'+variant.variantKey,name:root.name,order:i,width:n(root.width),height:n(root.height),variant,layers,svgNodeMap,svg:annotated});
  }
  const stateMap=new Map();roots.forEach(r=>mapState(r,r.id,stateMap));const rootIds=new Set(roots.map(r=>r.id));const prototype=proto(roots,stateMap,rootIds);prototype.startStateId=states[0].id;
- return{schema:'svg-motion-lab/figma-manifest@4',fidelityMetadataVersion:3,exportedAt:new Date().toISOString(),source:{fileName:figma.root.name,pageId:figma.currentPage.id,pageName:figma.currentPage.name},capabilities:{stableNodeIdsAcrossVariants:true,svgNodeMap:true,svgAstMerge:true,subtreeFallback:true,maskGeometry:true,clipHierarchy:true,filterHierarchy:true,vectorTopologyCorrespondence:true,gradientTransform:true},startNodeId:states[0].id,stateOrder:states.map(s=>s.id),states,prototype,transitions:legacy(prototype.reactions),calibration:{renderMode:'hybrid-smart-animate',layerMatchOrder:['stableNodeId','pluginKey','semanticPath','structuralSlot']}};
+ return{schema:'svg-motion-lab/figma-manifest@4',fidelityMetadataVersion:4,exportedAt:new Date().toISOString(),source:{fileName:figma.root.name,pageId:figma.currentPage.id,pageName:figma.currentPage.name},capabilities:{stableNodeIdsAcrossVariants:true,embeddedMotionIds:true,stableDefinitionIds:true,svgNodeMap:true,svgAstMerge:true,subtreeFallback:true,maskGeometry:true,clipHierarchy:true,filterHierarchy:true,vectorTopologyCorrespondence:true,gradientTransform:true,transformInterpolation:true,opacityInterpolation:true,colorInterpolation:true,pathMorph:true,rotationInterpolation:true,scaleInterpolation:true,translationInterpolation:true,visibilityInterpolation:true},startNodeId:states[0].id,stateOrder:states.map(s=>s.id),states,prototype,transitions:legacy(prototype.reactions),calibration:{renderMode:'multi-track-smart-animate',layerMatchOrder:['embeddedMotionId','stableNodeId','pluginKey','semanticPath','structuralSlot']}};
 }
+function annotateSvg(source,map,stateId){
+ let text=String(source||'');
+ const suffix=String(stateId||'').replace(/:/g,'_');
+ if(suffix)text=text.split(suffix).join('motion_shared');
+ const defsStart=text.indexOf('<defs');
+ const defsEnd=defsStart>=0?text.indexOf('</defs>',defsStart):-1;
+ const before=defsStart>=0?text.slice(0,defsStart):text;
+ const defs=defsStart>=0&&defsEnd>=0?text.slice(defsStart,defsEnd+7):'';
+ const after=defsStart>=0&&defsEnd>=0?text.slice(defsEnd+7):'';
+ const byTag={};
+ (map||[]).forEach(entry=>{const tag=String(entry.tag||'').toLowerCase();if(!byTag[tag])byTag[tag]=[];byTag[tag][entry.ordinal]=entry.stableNodeId});
+ function patch(segment){
+  const seen={};
+  return segment.replace(/<(g|rect|circle|ellipse|line|path|polygon|polyline|text|image)(\s|>)/g,(match,tag,tail)=>{
+   const key=tag.toLowerCase(),index=seen[key]||0;seen[key]=index+1;const id=byTag[key]&&byTag[key][index];
+   return id?'<'+tag+' data-motion-id="'+xml(id)+'"'+tail:match;
+  });
+ }
+ return patch(before)+defs+patch(after);
+}
+function xml(value){return String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function walk(node,parentKey,path,sibling,origin,variant,layers,map,ord,options){
  if(!options.includeHidden&&node.visible===false)return;
  const id=(variant.componentSetId||variant.variantRootId)+':'+path,box=node.absoluteBoundingBox||{x:node.x||0,y:node.y||0,width:node.width||0,height:node.height||0},bounds={x:n(box.x-origin.x),y:n(box.y-origin.y),width:n(box.width),height:n(box.height)},tag=tagOf(node),fills=paint(node,'fills',bounds),strokes=paint(node,'strokes',bounds),paths=pathData(node,id),effects=effectData(node),mask=('isMask'in node&&node.isMask)?{type:'mask',bounds,paths}:null,clip=('clipsContent'in node&&node.clipsContent)?{type:'clip',bounds,paths}:null,key=plugin(node)||path;
