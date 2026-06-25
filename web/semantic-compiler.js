@@ -10,11 +10,11 @@ window.__compilerReady = (async function () {
   }
 
   function patchSemantic8(source) {
-    const start = source.indexOf('function parseSvg(');
-    const end = source.indexOf('\n\nfunction prefixIds', start);
-    if (start < 0 || end < 0) throw new Error('Không tìm thấy hàm parseSvg trong semantic-8.js');
+    const parseStart = source.indexOf('function parseSvg(');
+    const parseEnd = source.indexOf('\n\nfunction prefixIds', parseStart);
+    if (parseStart < 0 || parseEnd < 0) throw new Error('Không tìm thấy hàm parseSvg trong semantic-8.js');
 
-    const replacement = `function parseSvg(text,state){
+    const parseReplacement = `function parseSvg(text,state){
  const doc=new DOMParser().parseFromString(text,'image/svg+xml');
  const parserError=doc.querySelector('parsererror');
  if(parserError)throw new Error('SVG AST không hợp lệ ở state '+(state&&state.name||state&&state.id||'unknown')+': '+parserError.textContent.slice(0,180));
@@ -50,11 +50,30 @@ window.__compilerReady = (async function () {
  return{state,doc,svg,mapped};
 }`;
 
-    let patched = source.slice(0, start) + replacement + source.slice(end);
+    let patched = source.slice(0, parseStart) + parseReplacement + source.slice(parseEnd);
+
+    const prefixStart = patched.indexOf('function prefixIds(');
+    const prefixEnd = patched.indexOf('\n\nfunction layerMap', prefixStart);
+    if (prefixStart < 0 || prefixEnd < 0) throw new Error('Không tìm thấy hàm prefixIds trong semantic-8.js');
+
+    const prefixReplacement = `function prefixIds(node,prefix){
+ const clone=node.cloneNode(true),idMap=new Map();
+ const all=[clone,...clone.querySelectorAll('*')];
+ all.filter(el=>el.hasAttribute&&el.hasAttribute('id')).forEach(el=>{const old=el.getAttribute('id'),next=prefix+old;idMap.set(old,next);el.setAttribute('id',next)});
+ const attrs=['fill','stroke','filter','clip-path','mask','href','xlink:href','style'];
+ all.forEach(el=>attrs.forEach(name=>{if(!el.hasAttribute||!el.hasAttribute(name))return;let value=el.getAttribute(name);idMap.forEach((next,old)=>{value=value.split('url(#'+old+')').join('url(#'+next+')').split('#'+old).join('#'+next)});el.setAttribute(name,value)}));
+ return clone;
+}`;
+
+    patched = patched.slice(0, prefixStart) + prefixReplacement + patched.slice(prefixEnd);
     patched = patched.replace('parsed=states.map(parseSvg)', 'parsed=states.map(state=>parseSvg(state.svg,state))');
     patched = patched.replace(
       "const activeTracks=tracks.filter(t=>!ancestorFallback(t,fallbackIds,states));",
       "const activeTracks=tracks.filter(t=>{if(String(t.id).endsWith(':@root'))return false;return !ancestorFallback(t,new Set([...fallbackIds].filter(id=>!String(id).endsWith(':@root'))),states)});"
+    );
+    patched = patched.replace(
+      "const clone=prefixIds(base,'base-');",
+      "const baseStateIndex=nodes.findIndex(Boolean);const clone=prefixIds(base,'s'+Math.max(0,baseStateIndex)+'-');"
     );
     return patched;
   }
