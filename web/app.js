@@ -8,6 +8,7 @@ window.__compilerReady.then(async function () {
       document.head.appendChild(script);
     });
   }
+  await loadScript('semantic-11.js');
   await loadScript('app-core.js');
   await loadScript('app-actions-hybrid.js');
 }).catch(function (error) {
