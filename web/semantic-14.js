@@ -6,6 +6,12 @@ if(!compiler||!S)return;
 const originalCompile=compiler.compile;
 const SVG_NS='http://www.w3.org/2000/svg';
 
+function escapeRegExp(value){return String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+function normalizedStateSvg(state){
+  const suffix=String(state.id||'').replace(/:/g,'_');
+  if(!suffix)return String(state.svg||'');
+  return String(state.svg||'').replace(new RegExp(escapeRegExp(suffix),'g'),'motion_shared');
+}
 function prefixTree(node,prefix){
   const clone=node.cloneNode(true);
   const all=[clone,...clone.querySelectorAll('*')];
@@ -26,7 +32,7 @@ function prefixTree(node,prefix){
   return clone;
 }
 function parseStateSvg(state){
-  const documentNode=new DOMParser().parseFromString(state.svg,'image/svg+xml');
+  const documentNode=new DOMParser().parseFromString(normalizedStateSvg(state),'image/svg+xml');
   const error=documentNode.querySelector('parsererror');
   if(error)throw new Error('Không thể parse ring state '+(state.name||state.id)+': '+error.textContent.slice(0,160));
   return documentNode.documentElement;
@@ -102,11 +108,13 @@ function repair(result,manifest){
   svg.appendChild(script);
   result.svg='<?xml version="1.0" encoding="UTF-8"?>'+new XMLSerializer().serializeToString(svg);
   result.html=S.buildHtml(result.svg,result.schedule);
-  result.semanticReport=Object.assign({},result.semanticReport,{exactRingSubtrees:true,ringStateCount:exactRoot.children.length});
+  result.semanticReport=Object.assign({},result.semanticReport,{exactRingSubtrees:true,ringStateCount:exactRoot.children.length,ringDefinitionReferencesNormalized:true});
   result.report.report.exactRingSubtrees=true;
   result.report.report.ringStateCount=exactRoot.children.length;
+  result.report.report.ringDefinitionReferencesNormalized=true;
   result.ir.smartAnimate.exactRingSubtrees=true;
   result.ir.smartAnimate.ringStateCount=exactRoot.children.length;
+  result.ir.smartAnimate.ringDefinitionReferencesNormalized=true;
   return result;
 }
 compiler.compile=function(manifest,options){return repair(originalCompile(manifest,options),manifest)};
