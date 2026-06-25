@@ -11,6 +11,7 @@ window.__compilerReady.then(async function () {
   await loadScript('semantic-11.js');
   await loadScript('semantic-12.js');
   await loadScript('semantic-13.js');
+  await loadScript('semantic-14.js');
   await loadScript('app-core.js');
   await loadScript('app-actions-hybrid.js');
 }).catch(function (error) {
