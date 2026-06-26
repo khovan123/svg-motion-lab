@@ -2,7 +2,7 @@ window.__compilerReady = (async function () {
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = src;
+      script.src = src + '?v=' + Date.now();
       script.onload = resolve;
       script.onerror = () => reject(new Error('Không tải được ' + src));
       document.head.appendChild(script);

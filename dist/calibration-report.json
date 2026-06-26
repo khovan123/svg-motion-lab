@@ -1,121 +1,101 @@
 {
   "report": {
-    "manifestSchema": "svg-motion-lab/figma-manifest@3",
-    "manifestVersion": 3,
+    "manifestSchema": "svg-motion-lab/figma-manifest@4",
     "prototypeReady": true,
     "snapshotsReady": true,
-    "renderMode": "snapshot",
-    "matchedLayers": 0,
-    "fallbackLayers": 0,
-    "gradientTracks": 0,
-    "pathMorphs": 0,
-    "snapshotStates": 8,
-    "prototypeReactions": 8,
-    "unsupportedActions": [],
-    "warnings": []
+    "infinite": true,
+    "customDuration": 4.001000059604645,
+    "renderMode": "multi-track-smart-animate",
+    "totalTracks": 18,
+    "pathMorphTracks": 14,
+    "transformTracks": 18,
+    "rotationTracks": 18,
+    "colorTracks": 15,
+    "presenceTracks": 0,
+    "fullStateSnapshots": 0,
+    "embeddedMotionIds": true,
+    "genericAnimationTypes": [
+      "numeric-geometry",
+      "translate",
+      "scale",
+      "matrix-transform",
+      "rotation",
+      "opacity",
+      "visibility",
+      "solid-color",
+      "path-morph",
+      "appear-disappear"
+    ],
+    "connectorStatic": true,
+    "refreshRotationTrack": true,
+    "pieFallbackSwap": true,
+    "status": "ok",
+    "semanticTracks": 18,
+    "pathMorphs": 14,
+    "subtreeFallbacks": 0,
+    "runtimeSyntaxRepaired": true,
+    "staticRotationTracksSkipped": true,
+    "prototypeReactions": 4
   },
   "schedule": {
     "stateIds": [
-      "1:4218",
-      "1:4182",
-      "1:4254",
-      "1:4439",
-      "1:4291",
-      "1:4328",
-      "1:4365",
-      "1:4402"
+      "1:4530",
+      "1:4512",
+      "1:4494",
+      "1:4476"
     ],
     "segments": [
       {
-        "from": "1:4218",
-        "to": "1:4182",
-        "transitionStart": 0.8,
-        "transitionEnd": 1.600000011920929,
+        "from": "1:4530",
+        "to": "1:4512",
+        "hold": 0.4000000059604645,
         "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4218:0"
-      },
-      {
-        "from": "1:4182",
-        "to": "1:4254",
-        "transitionStart": 2.4000000238418577,
-        "transitionEnd": 3.2000000357627867,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4182:1"
-      },
-      {
-        "from": "1:4254",
-        "to": "1:4439",
-        "transitionStart": 4.0000000357627865,
-        "transitionEnd": 4.8000000476837155,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4254:2"
-      },
-      {
-        "from": "1:4439",
-        "to": "1:4291",
-        "transitionStart": 5.600000047683715,
-        "transitionEnd": 6.400000059604644,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4439:3"
-      },
-      {
-        "from": "1:4291",
-        "to": "1:4328",
-        "transitionStart": 7.200000059604644,
-        "transitionEnd": 8.000000071525573,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4291:4"
-      },
-      {
-        "from": "1:4328",
-        "to": "1:4365",
-        "transitionStart": 8.800000071525574,
-        "transitionEnd": 9.600000083446503,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4328:5"
-      },
-      {
-        "from": "1:4365",
-        "to": "1:4402",
-        "transitionStart": 10.400000083446503,
-        "transitionEnd": 11.200000095367432,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_IN_AND_OUT"
-        },
-        "reactionId": "1:4365:6"
-      },
-      {
-        "from": "1:4402",
-        "to": "1:4218",
-        "transitionStart": 12.000000107288361,
-        "transitionEnd": 12.300000107288362,
-        "duration": 0.3,
         "easing": {
           "type": "EASE_OUT"
         },
-        "reactionId": "1:4402:7"
+        "reactionId": "1:4530:0",
+        "transitionStart": 0.4000000059604645,
+        "transitionEnd": 1.2000000178813934
+      },
+      {
+        "from": "1:4512",
+        "to": "1:4494",
+        "hold": 0.4000000059604645,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4512:1",
+        "transitionStart": 1.600000023841858,
+        "transitionEnd": 2.400000035762787
+      },
+      {
+        "from": "1:4494",
+        "to": "1:4476",
+        "hold": 0.4000000059604645,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4494:2",
+        "transitionStart": 2.8000000417232513,
+        "transitionEnd": 3.6000000536441803
+      },
+      {
+        "from": "1:4476",
+        "to": "1:4530",
+        "hold": 0.4000000059604645,
+        "duration": 0.001,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4476:3",
+        "transitionStart": 4.000000059604645,
+        "transitionEnd": 4.001000059604645
       }
     ],
-    "totalDuration": 12.300000107288362,
-    "looped": true
+    "totalDuration": 4.001000059604645,
+    "looped": true,
+    "infinite": true
   }
 }

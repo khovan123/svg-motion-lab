@@ -7,7 +7,8 @@ const originalCompile=compiler.compile;
 function patchRuntime(source){
   let text=String(source||'');
   text=text.replace(/\)\}function render/g,')} ;function render');
-  text=text.replace(/if\(ra&&rb\)\{/g,"if(ra&&rb&&(ra.angle!==rb.angle||ra.angle!==0||rb.angle!==0)){" );
+  text=text.replace("const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)el.setAttribute('transform','matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')');const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;el.setAttribute('transform','rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')')}",
+    "let transformAttr='';const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)transformAttr='matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')';const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;const rotateStr='rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')';transformAttr=transformAttr?transformAttr+' '+rotateStr:rotateStr;}if(transformAttr)el.setAttribute('transform',transformAttr);");
   text=text.replace(/const ta=a\.match\(\/\[a-zA-Z\]\|-\?\\d\*\\\.\?\\d\+\(\?:e\[-\+\]\?\\d\+\)\?\/g\)\|\|\[\],tb=b\.match\(\/\[a-zA-Z\]\|-\?\\d\*\\\.\?\\d\+\(\?:e\[-\+\]\?\\d\+\)\?\/g\)\|\|\[\];let ni=0;return ta\.map\(\(token,index\)=>\/\^\[a-zA-Z\]\$\/\.test\(token\)\?token:String\(L\(Number\(token\),Number\(tb\[index\]\),p\)\)\)\.join\(' '\)/,
     "const ta=a.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[],tb=b.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[];let ni=0;const bn=tb.filter(token=>!/^[a-zA-Z]$/.test(token)).map(Number);return ta.map(token=>/^[a-zA-Z]$/.test(token)?token:String(L(Number(token),bn[ni++],p))).join(' ')");
   return text;

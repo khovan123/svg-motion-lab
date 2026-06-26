@@ -1,0 +1,156 @@
+{
+  "report": {
+    "manifestSchema": "svg-motion-lab/figma-manifest@4",
+    "prototypeReady": true,
+    "snapshotsReady": true,
+    "infinite": true,
+    "customDuration": 12.00100010728836,
+    "renderMode": "multi-track-smart-animate",
+    "totalTracks": 32,
+    "pathMorphTracks": 21,
+    "transformTracks": 31,
+    "rotationTracks": 31,
+    "colorTracks": 25,
+    "presenceTracks": 6,
+    "fullStateSnapshots": 0,
+    "embeddedMotionIds": true,
+    "genericAnimationTypes": [
+      "numeric-geometry",
+      "translate",
+      "scale",
+      "matrix-transform",
+      "rotation",
+      "opacity",
+      "visibility",
+      "solid-color",
+      "path-morph",
+      "appear-disappear"
+    ],
+    "connectorStatic": true,
+    "refreshRotationTrack": true,
+    "pieFallbackSwap": true,
+    "exactRingSubtrees": true,
+    "ringStateCount": 9,
+    "ringDefinitionReferencesNormalized": true,
+    "status": "ok",
+    "semanticTracks": 32,
+    "pathMorphs": 21,
+    "subtreeFallbacks": 0,
+    "runtimeSyntaxRepaired": true,
+    "staticRotationTracksSkipped": true,
+    "prototypeReactions": 8
+  },
+  "schedule": {
+    "stateIds": [
+      "1:4218",
+      "1:4182",
+      "1:4254",
+      "1:4439",
+      "1:4291",
+      "1:4328",
+      "1:4365",
+      "1:4402"
+    ],
+    "segments": [
+      {
+        "from": "1:4218",
+        "to": "1:4182",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4218:0",
+        "transitionStart": 0.8,
+        "transitionEnd": 1.600000011920929
+      },
+      {
+        "from": "1:4182",
+        "to": "1:4254",
+        "hold": 0.800000011920929,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4182:1",
+        "transitionStart": 2.4000000238418577,
+        "transitionEnd": 3.2000000357627867
+      },
+      {
+        "from": "1:4254",
+        "to": "1:4439",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4254:2",
+        "transitionStart": 4.0000000357627865,
+        "transitionEnd": 4.8000000476837155
+      },
+      {
+        "from": "1:4439",
+        "to": "1:4291",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4439:3",
+        "transitionStart": 5.600000047683715,
+        "transitionEnd": 6.400000059604644
+      },
+      {
+        "from": "1:4291",
+        "to": "1:4328",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4291:4",
+        "transitionStart": 7.200000059604644,
+        "transitionEnd": 8.000000071525573
+      },
+      {
+        "from": "1:4328",
+        "to": "1:4365",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4328:5",
+        "transitionStart": 8.800000071525574,
+        "transitionEnd": 9.600000083446503
+      },
+      {
+        "from": "1:4365",
+        "to": "1:4402",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4365:6",
+        "transitionStart": 10.400000083446503,
+        "transitionEnd": 11.200000095367432
+      },
+      {
+        "from": "1:4402",
+        "to": "1:4218",
+        "hold": 0.800000011920929,
+        "duration": 0.001,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4402:7",
+        "transitionStart": 12.000000107288361,
+        "transitionEnd": 12.00100010728836
+      }
+    ],
+    "totalDuration": 12.00100010728836,
+    "looped": true,
+    "infinite": true
+  }
+}
