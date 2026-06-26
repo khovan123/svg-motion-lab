@@ -411,6 +411,159 @@ function mergeDuplicateFillAndStrokePaths(rootSvg) {
   }
 }
 
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+}
+
+function channelToHex(value) {
+  return clampByte(value).toString(16).padStart(2, '0');
+}
+
+function layerColorKey(color) {
+  if (!color) return null;
+  return '#' + channelToHex((color.r || 0) * 255) + channelToHex((color.g || 0) * 255) + channelToHex((color.b || 0) * 255);
+}
+
+function svgColorKey(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text || text === 'none') return null;
+  if (text === 'white') return '#ffffff';
+  if (text === 'black') return '#000000';
+  let m;
+  if ((m = text.match(/^#[0-9a-f]{3}$/i))) {
+    return '#' + m[0].slice(1).split('').map(ch => ch + ch).join('');
+  }
+  if ((m = text.match(/^#[0-9a-f]{6}$/i))) {
+    return m[0];
+  }
+  if ((m = text.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i))) {
+    return '#' + channelToHex(m[1]) + channelToHex(m[2]) + channelToHex(m[3]);
+  }
+  return text;
+}
+
+function layerPaintSignature(layer) {
+  const fill = layer && layer.fills && layer.fills[0];
+  if (!fill) return { kind: 'none', colors: [] };
+  const type = String(fill.type || '').toUpperCase();
+  if (type === 'SOLID') {
+    return { kind: 'solid', colors: [layerColorKey(fill.color)] };
+  }
+  if (type.indexOf('GRADIENT_') === 0) {
+    return {
+      kind: 'gradient',
+      colors: (fill.gradientStops || []).map(stop => layerColorKey(stop && stop.color)).filter(Boolean)
+    };
+  }
+  return { kind: type.toLowerCase(), colors: [] };
+}
+
+function elementPaintSignature(el, rootSvg) {
+  if (!el) return { kind: 'none', colors: [] };
+  const fill = el.getAttribute('fill');
+  if (!fill || fill === 'none') return { kind: 'none', colors: [] };
+  const ref = String(fill).match(/^url\(#([^)]+)\)$/);
+  if (ref && rootSvg) {
+    const def = rootSvg.querySelector('#' + ref[1]);
+    if (def) {
+      const tag = String(def.tagName || '').toLowerCase();
+      if (tag === 'lineargradient' || tag === 'radialgradient') {
+        return {
+          kind: 'gradient',
+          colors: Array.from(def.querySelectorAll('stop')).map(stop => svgColorKey(stop.getAttribute('stop-color'))).filter(Boolean)
+        };
+      }
+    }
+  }
+  return { kind: 'solid', colors: [svgColorKey(fill)] };
+}
+
+function colorPenalty(a, b) {
+  if (!a || !b) return 24;
+  if (a === b) return 0;
+  const hex = /^#[0-9a-f]{6}$/i;
+  if (!hex.test(a) || !hex.test(b)) return 32;
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  return (Math.abs(ar - br) + Math.abs(ag - bg) + Math.abs(ab - bb)) / 6;
+}
+
+function paintPenalty(el, layer, rootSvg) {
+  const layerPaint = layerPaintSignature(layer);
+  const elementPaint = elementPaintSignature(el, rootSvg);
+  if (layerPaint.kind === 'none' || elementPaint.kind === 'none') return 0;
+  let penalty = 0;
+  if (layerPaint.kind !== elementPaint.kind) penalty += 120;
+  penalty += Math.abs(layerPaint.colors.length - elementPaint.colors.length) * 8;
+  const count = Math.min(layerPaint.colors.length, elementPaint.colors.length);
+  if (count > 0) {
+    penalty += colorPenalty(layerPaint.colors[0], elementPaint.colors[0]);
+    if (count > 1) penalty += colorPenalty(layerPaint.colors[count - 1], elementPaint.colors[count - 1]);
+  }
+  return penalty;
+}
+
+function definitionPaintSignature(defNode) {
+  if (!defNode) return null;
+  const tag = String(defNode.tagName || '').toLowerCase();
+  const attrs = Array.from(defNode.attributes || [])
+    .filter(attr => attr.name !== 'id')
+    .map(attr => `${attr.name}=${attr.value}`)
+    .sort()
+    .join('|');
+  const stops = Array.from(defNode.querySelectorAll ? defNode.querySelectorAll('stop') : [])
+    .map(stop => {
+      const offset = stop.getAttribute('offset') || '';
+      const color = svgColorKey(stop.getAttribute('stop-color')) || '';
+      const opacity = stop.getAttribute('stop-opacity') || '';
+      return `${offset}:${color}:${opacity}`;
+    })
+    .join('|');
+  return `${tag}|${attrs}|${stops}`;
+}
+
+function normalizeEquivalentPaintRefsInTracks(tracks, rootSvg) {
+  const refPattern = /^url\(#([^)]+)\)$/;
+  const signatureCache = new Map();
+  const signatureForRef = (value) => {
+    const match = typeof value === 'string' && value.match(refPattern);
+    if (!match) return null;
+    const id = match[1];
+    if (signatureCache.has(id)) return signatureCache.get(id);
+    const defNode = rootSvg.querySelector('#' + id);
+    const signature = definitionPaintSignature(defNode);
+    signatureCache.set(id, signature);
+    return signature;
+  };
+
+  tracks.forEach(track => {
+    const canonicalByAttr = new Map();
+    (track.colors || []).forEach(colorSet => {
+      if (!colorSet) return;
+      Object.entries(colorSet).forEach(([attrName, value]) => {
+        const signature = signatureForRef(value);
+        if (!signature) return;
+        if (!canonicalByAttr.has(attrName)) canonicalByAttr.set(attrName, new Map());
+        const bySignature = canonicalByAttr.get(attrName);
+        if (!bySignature.has(signature)) bySignature.set(signature, value);
+      });
+    });
+    (track.colors || []).forEach(colorSet => {
+      if (!colorSet) return;
+      Object.entries(colorSet).forEach(([attrName, value]) => {
+        const signature = signatureForRef(value);
+        if (!signature) return;
+        const canonical = canonicalByAttr.get(attrName) && canonicalByAttr.get(attrName).get(signature);
+        if (canonical) colorSet[attrName] = canonical;
+      });
+    });
+  });
+}
+
 function matchGeometryGloballyV2(state) {
   const doc = new DOMParser().parseFromString(state.svg, 'image/svg+xml');
   const rootSvg = doc.documentElement;
@@ -482,6 +635,14 @@ function matchGeometryGloballyV2(state) {
     matchedNodes.set(rootLayer.stableNodeId, scene);
     scene.setAttribute('data-motion-id', rootLayer.stableNodeId);
   }
+  const shouldUsePaintTieBreaker = (layer) => {
+    const bounds = layer && layer.bounds;
+    if (!layer || !bounds || !rootLayer) return false;
+    if (layer.type !== 'RECTANGLE') return false;
+    if (layer.parentStableNodeId !== rootLayer.stableNodeId) return false;
+    if (bounds.height > 24) return false;
+    return bounds.y >= Number(state.height || 0) - 80;
+  };
 
   const containerLayers = state.layers.filter(l => ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'].includes(l.type) && l.stableNodeId !== rootLayer.stableNodeId);
   const leafLayers = state.layers.filter(l => !['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'].includes(l.type));
@@ -502,7 +663,7 @@ function matchGeometryGloballyV2(state) {
   // Pass 1: Match exact bounds
   leafLayers.forEach(layer => {
     let bestMatch = null;
-    let minDiff = Infinity;
+    let bestScore = Infinity;
 
     svgElements.forEach(el => {
       if (matchedElementsSet.has(el)) return;
@@ -522,8 +683,9 @@ function matchGeometryGloballyV2(state) {
       const boundsMatch = dx < 2.5 && dy < 2.5 && dw < 2.5 && dh < 2.5;
 
       if (boundsMatch) {
-        if (diff < minDiff) {
-          minDiff = diff;
+        const score = diff + (shouldUsePaintTieBreaker(layer) ? paintPenalty(el, layer, rootSvg) : 0);
+        if (score < bestScore) {
+          bestScore = score;
           bestMatch = el;
         }
       }
@@ -541,7 +703,7 @@ function matchGeometryGloballyV2(state) {
     if (matchedNodes.has(layer.stableNodeId)) return; // Already matched in Pass 1
 
     let bestMatch = null;
-    let minDiff = Infinity;
+    let bestScore = Infinity;
 
     svgElements.forEach(el => {
       if (matchedElementsSet.has(el)) return;
@@ -565,8 +727,9 @@ function matchGeometryGloballyV2(state) {
                        bSVG.y + bSVG.height <= bLayer.y + bLayer.height + 3.5;
 
       if (isInside && (layer.name.toLowerCase().includes('yellow') || layer.name.toLowerCase().includes('cyan') || layer.name.toLowerCase().includes('blue') || layer.name.toLowerCase().includes('orange') || layer.type === 'ELLIPSE' || layer.type === 'TEXT')) {
-        if (diff < minDiff) {
-          minDiff = diff;
+        const score = diff + (shouldUsePaintTieBreaker(layer) ? paintPenalty(el, layer, rootSvg) : 0);
+        if (score < bestScore) {
+          bestScore = score;
           bestMatch = el;
         }
       }
@@ -817,7 +980,8 @@ function canonicalizeManifest(manifest){
     
     const doc = new DOMParser().parseFromString(stateWithGeom.svg, 'image/svg+xml');
     const rootSvg = doc.documentElement;
-    const defElements = rootSvg.querySelectorAll('linearGradient, radialGradient, clipPath, mask, filter');
+    const defsRoot = rootSvg.querySelector('defs');
+    const defElements = defsRoot ? Array.from(defsRoot.children).filter(el => el.getAttribute('id')) : [];
     const idMap = new Map();
     const collectedDefs = [];
 
@@ -1067,7 +1231,65 @@ function cloneMissingTracks(scene,tracks,states){
   });
 }
 
-function runtime(data){const json=JSON.stringify(data).replace(/</g,'\\u003c');return"(()=>{const D="+json+",svg=(document.currentScript&&(document.currentScript.closest('svg')||document.currentScript.ownerDocument.querySelector('#motion-svg')||document.currentScript.ownerDocument.documentElement))||document.querySelector('#motion-svg')||document.documentElement,scene=svg.querySelector('#motion-scene');let start=performance.now(),manual=false,paused=false;const C=v=>Math.max(0,Math.min(1,v)),L=(a,b,p)=>(Number(a)||0)+((Number(b)||0)-(Number(a)||0))*p,E=p=>p*p*(3-2*p),pick=(arr,i)=>arr[i]!=null?arr[i]:arr.slice(0,i).reverse().find(v=>v!=null)??arr.find(v=>v!=null);function state(t){let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}return{active,segment}}function color(a,b,p){if(typeof a==='string'||typeof b==='string')return p<0.5?a:b;return'rgb('+[0,1,2].map(i=>Math.round(L(a[i],b[i],p))).join(',')+')'}function path(track,from,to,p){const a=pick(track.paths,from),b=pick(track.paths,to);if(!a||!b)return null;const ta=a.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[],tb=b.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[];let ni=0;return ta.map((token,index)=>/^[a-zA-Z]$/.test(token)?token:String(L(Number(token),Number(tb[index]),p))).join(' ')}function render(t){const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:C(t/total)*total;const q=state(t),p=q.segment?E(C((t-q.segment.start)/Math.max(.001,q.segment.end-q.segment.start))):0,from=q.segment?q.segment.from:q.active,to=q.segment?q.segment.to:q.active;for(const tr of D.tracks){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(!el)continue;if(el.hasAttribute('data-refresh-rotor')||el.hasAttribute('data-exact-ring')||el.getAttribute('data-static-connector')==='true')continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const pa=tr.present[from],pb=tr.present[to];if(!pa&&!pb){el.setAttribute('visibility','hidden');continue}el.setAttribute('visibility','visible');const na=pick(tr.numeric,from)||{},nb=pick(tr.numeric,to)||{};for(const name of D.numeric){if(na[name]!=null||nb[name]!=null)el.setAttribute(name,String(L(na[name],nb[name],p)))}const ca=pick(tr.colors,from)||{},cb=pick(tr.colors,to)||{};for(const name of D.colors){if(ca[name]&&cb[name])el.setAttribute(name,color(ca[name],cb[name],p))}if(tr.pathMode){const d=path(tr,from,to,p);if(d)el.setAttribute('d',d)}else if(tr.paths){const d=p<0.5?pick(tr.paths,from):pick(tr.paths,to);if(d)el.setAttribute('d',d)}const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)el.setAttribute('transform','matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')');const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;el.setAttribute('transform','rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')')}if(pa&&!pb)el.setAttribute('opacity',String(1-p));else if(!pa&&pb)el.setAttribute('opacity',String(p))}const sorted=[];for(const tr of D.tracks){if(tr.zOrder){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(el){if(el.parentNode!==scene)continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const za=pick(tr.zOrder,from),zb=pick(tr.zOrder,to);sorted.push({el,z:L(za,zb,p)})}}}const exactRing=scene.querySelector('[data-exact-ring]');if(exactRing){const connIdx=sorted.findIndex(item=>{const mid=item.el.getAttribute('data-motion-id');return(mid&&mid.includes('vector-1[0]'))||item.el.getAttribute('data-static-connector')==='true'});if(connIdx>=0){sorted.push({el:exactRing,z:sorted[connIdx].z-0.5})}else{sorted.push({el:exactRing,z:20})}}sorted.sort((a,b)=>a.z-b.z);for(const item of sorted)scene.appendChild(item.el)}function tick(now){if(!manual&&!paused)render((now-start)/1000);requestAnimationFrame(tick)}svg.__motionController={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;start=performance.now()},pause(){paused=true},restart(){manual=false;paused=false;start=performance.now();render(0)}};render(0);requestAnimationFrame(tick)})()"}
+function multiplyAffine(a, b) {
+  if (!a || !b) return null;
+  return [
+    a[0] * b[0] + a[2] * b[1],
+    a[1] * b[0] + a[3] * b[1],
+    a[0] * b[2] + a[2] * b[3],
+    a[1] * b[2] + a[3] * b[3],
+    a[0] * b[4] + a[2] * b[5] + a[4],
+    a[1] * b[4] + a[3] * b[5] + a[5]
+  ];
+}
+
+function invertAffine(matrix) {
+  if (!matrix) return null;
+  const det = matrix[0] * matrix[3] - matrix[1] * matrix[2];
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-9) return null;
+  return [
+    matrix[3] / det,
+    -matrix[1] / det,
+    -matrix[2] / det,
+    matrix[0] / det,
+    (matrix[2] * matrix[5] - matrix[3] * matrix[4]) / det,
+    (matrix[1] * matrix[4] - matrix[0] * matrix[5]) / det
+  ];
+}
+
+function nearestTrackedAncestorId(id, ids) {
+  let current = String(id || '');
+  while (current.includes('/')) {
+    current = current.slice(0, current.lastIndexOf('/'));
+    if (ids.has(current)) return current;
+  }
+  return null;
+}
+
+function normalizeNestedTrackTransforms(tracks) {
+  const byId = new Map(tracks.map(track => [track.id, track]));
+  const ids = new Set(byId.keys());
+  tracks.forEach(track => {
+    const ancestorId = nearestTrackedAncestorId(track.id, ids);
+    if (!ancestorId) return;
+    const ancestor = byId.get(ancestorId);
+    if (!ancestor || !ancestor.transforms || !track.transforms) return;
+    track.transforms = track.transforms.map((matrix, index) => {
+      const parentMatrix = ancestor.transforms[index];
+      if (!matrix || !parentMatrix) return matrix;
+      const parentInverse = invertAffine(parentMatrix);
+      if (!parentInverse) return matrix;
+      return multiplyAffine(parentInverse, matrix);
+    });
+  });
+}
+
+function runtime(data){
+  const json=JSON.stringify(data).replace(/</g,'\\u003c');
+  if(!data.wrapperAwareZOrder&&!data.referencedColorInterpolation)return"(()=>{const D="+json+",svg=(document.currentScript&&(document.currentScript.closest('svg')||document.currentScript.ownerDocument.querySelector('#motion-svg')||document.currentScript.ownerDocument.documentElement))||document.querySelector('#motion-svg')||document.documentElement,scene=svg.querySelector('#motion-scene');let start=performance.now(),manual=false,paused=false;const C=v=>Math.max(0,Math.min(1,v)),L=(a,b,p)=>(Number(a)||0)+((Number(b)||0)-(Number(a)||0))*p,E=p=>p*p*(3-2*p),pick=(arr,i)=>arr[i]!=null?arr[i]:arr.slice(0,i).reverse().find(v=>v!=null)??arr.find(v=>v!=null);function state(t){let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}return{active,segment}}function color(a,b,p){if(typeof a==='string'||typeof b==='string')return p<0.5?a:b;return'rgb('+[0,1,2].map(i=>Math.round(L(a[i],b[i],p))).join(',')+')'}function path(track,from,to,p){const a=pick(track.paths,from),b=pick(track.paths,to);if(!a||!b)return null;const ta=a.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[],tb=b.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[];let ni=0;return ta.map((token,index)=>/^[a-zA-Z]$/.test(token)?token:String(L(Number(token),Number(tb[index]),p))).join(' ')}function render(t){const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:C(t/total)*total;const q=state(t),p=q.segment?E(C((t-q.segment.start)/Math.max(.001,q.segment.end-q.segment.start))):0,from=q.segment?q.segment.from:q.active,to=q.segment?q.segment.to:q.active;for(const tr of D.tracks){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(!el)continue;if(el.hasAttribute('data-refresh-rotor')||el.hasAttribute('data-exact-ring')||el.getAttribute('data-static-connector')==='true')continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const pa=tr.present[from],pb=tr.present[to];if(!pa&&!pb){el.setAttribute('visibility','hidden');continue}el.setAttribute('visibility','visible');const na=pick(tr.numeric,from)||{},nb=pick(tr.numeric,to)||{};for(const name of D.numeric){if(na[name]!=null||nb[name]!=null)el.setAttribute(name,String(L(na[name],nb[name],p)))}const ca=pick(tr.colors,from)||{},cb=pick(tr.colors,to)||{};for(const name of D.colors){if(ca[name]&&cb[name])el.setAttribute(name,color(ca[name],cb[name],p))}if(tr.pathMode){const d=path(tr,from,to,p);if(d)el.setAttribute('d',d)}else if(tr.paths){const d=p<0.5?pick(tr.paths,from):pick(tr.paths,to);if(d)el.setAttribute('d',d)}const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)el.setAttribute('transform','matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')');const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;el.setAttribute('transform','rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')')}if(pa&&!pb)el.setAttribute('opacity',String(1-p));else if(!pa&&pb)el.setAttribute('opacity',String(p))}const sorted=[];for(const tr of D.tracks){if(tr.zOrder){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(el){if(el.parentNode!==scene)continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const za=pick(tr.zOrder,from),zb=pick(tr.zOrder,to);sorted.push({el,z:L(za,zb,p)})}}}const exactRing=scene.querySelector('[data-exact-ring]');if(exactRing){const connIdx=sorted.findIndex(item=>{const mid=item.el.getAttribute('data-motion-id');return(mid&&mid.includes('vector-1[0]'))||item.el.getAttribute('data-static-connector')==='true'});if(connIdx>=0){sorted.push({el:exactRing,z:sorted[connIdx].z-0.5})}else{sorted.push({el:exactRing,z:20})}}sorted.sort((a,b)=>a.z-b.z);for(const item of sorted)scene.appendChild(item.el)}function tick(now){if(!manual&&!paused)render((now-start)/1000);requestAnimationFrame(tick)}svg.__motionController={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;start=performance.now()},pause(){paused=true},restart(){manual=false;paused=false;start=performance.now();render(0)}};render(0);requestAnimationFrame(tick)})()";
+  if(!data.wrapperAwareZOrder)return"(()=>{const D="+json+",svg=(document.currentScript&&(document.currentScript.closest('svg')||document.currentScript.ownerDocument.querySelector('#motion-svg')||document.currentScript.ownerDocument.documentElement))||document.querySelector('#motion-svg')||document.documentElement,scene=svg.querySelector('#motion-scene');let start=performance.now(),manual=false,paused=false;const C=v=>Math.max(0,Math.min(1,v)),L=(a,b,p)=>(Number(a)||0)+((Number(b)||0)-(Number(a)||0))*p,E=p=>p*p*(3-2*p),pick=(arr,i)=>arr[i]!=null?arr[i]:arr.slice(0,i).reverse().find(v=>v!=null)??arr.find(v=>v!=null);function state(t){let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}return{active,segment}}function hex(value){const text=String(value||'').trim();if(!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(text))return null;if(text.length===4)return'#'+text.slice(1).split('').map(ch=>ch+ch).join('');return text.toLowerCase()}function parseColor(value){if(Array.isArray(value))return value;if(typeof value!=='string')return null;const text=String(value).trim();const normalized=hex(text);if(normalized)return[parseInt(normalized.slice(1,3),16),parseInt(normalized.slice(3,5),16),parseInt(normalized.slice(5,7),16)];const named={white:[255,255,255],black:[0,0,0]};if(named[text.toLowerCase()])return named[text.toLowerCase()];const rgb=text.match(/^rgb\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)$/i);if(rgb)return[rgb[1],rgb[2],rgb[3]].map(Number);const ref=text.match(/^url\\(#([^)]+)\\)$/);if(!ref)return null;const def=svg.querySelector('#'+ref[1]);if(!def)return null;const stops=[...def.querySelectorAll('stop')].map(stop=>parseColor(stop.getAttribute('stop-color'))).filter(Boolean);if(!stops.length)return null;const totals=stops.reduce((acc,color)=>[acc[0]+color[0],acc[1]+color[1],acc[2]+color[2]],[0,0,0]);return totals.map(total=>total/stops.length)}function color(a,b,p){if(p<=0)return a;if(p>=1)return b;if(D.referencedColorInterpolation){const ra=parseColor(a),rb=parseColor(b);if(ra&&rb)return'rgb('+[0,1,2].map(i=>Math.round(L(ra[i],rb[i],p))).join(',')+')'}if(typeof a==='string'||typeof b==='string')return p<0.5?a:b;return'rgb('+[0,1,2].map(i=>Math.round(L(a[i],b[i],p))).join(',')+')'}function path(track,from,to,p){const a=pick(track.paths,from),b=pick(track.paths,to);if(!a||!b)return null;const ta=a.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[],tb=b.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[];let ni=0;const bn=tb.filter(token=>!/^[a-zA-Z]$/.test(token)).map(Number);return ta.map(token=>/^[a-zA-Z]$/.test(token)?token:String(L(Number(token),bn[ni++],p))).join(' ')} ;function render(t){const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:C(t/total)*total;const q=state(t),p=q.segment?E(C((t-q.segment.start)/Math.max(.001,q.segment.end-q.segment.start))):0,from=q.segment?q.segment.from:q.active,to=q.segment?q.segment.to:q.active;for(const tr of D.tracks){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(!el)continue;if(el.hasAttribute('data-refresh-rotor')||el.hasAttribute('data-exact-ring')||el.getAttribute('data-static-connector')==='true')continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const pa=tr.present[from],pb=tr.present[to];if(!pa&&!pb){el.setAttribute('visibility','hidden');continue}el.setAttribute('visibility','visible');const na=pick(tr.numeric,from)||{},nb=pick(tr.numeric,to)||{};for(const name of D.numeric){if(na[name]!=null||nb[name]!=null)el.setAttribute(name,String(L(na[name],nb[name],p)))}const ca=pick(tr.colors,from)||{},cb=pick(tr.colors,to)||{};for(const name of D.colors){if(ca[name]&&cb[name])el.setAttribute(name,color(ca[name],cb[name],p))}if(tr.pathMode){const d=path(tr,from,to,p);if(d)el.setAttribute('d',d)}else if(tr.paths){const d=p<0.5?pick(tr.paths,from):pick(tr.paths,to);if(d)el.setAttribute('d',d)}let transformAttr='';const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)transformAttr='matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')';const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;const rotateStr='rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')';transformAttr=transformAttr?transformAttr+' '+rotateStr:rotateStr;}if(transformAttr)el.setAttribute('transform',transformAttr);if(pa&&!pb)el.setAttribute('opacity',String(1-p));else if(!pa&&pb)el.setAttribute('opacity',String(p))}const sorted=[];for(const tr of D.tracks){if(tr.zOrder){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(el){if(el.parentNode!==scene)continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const za=pick(tr.zOrder,from),zb=pick(tr.zOrder,to);sorted.push({el,z:L(za,zb,p)})}}}const exactRing=scene.querySelector('[data-exact-ring]');if(exactRing){const connIdx=sorted.findIndex(item=>{const mid=item.el.getAttribute('data-motion-id');return(mid&&mid.includes('vector-1[0]'))||item.el.getAttribute('data-static-connector')==='true'});if(connIdx>=0){sorted.push({el:exactRing,z:sorted[connIdx].z-0.5})}else{sorted.push({el:exactRing,z:20})}}sorted.sort((a,b)=>a.z-b.z);for(const item of sorted)scene.appendChild(item.el)}function tick(now){if(!manual&&!paused)render((now-start)/1000);requestAnimationFrame(tick)}svg.__motionController={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;start=performance.now()},pause(){paused=true},restart(){manual=false;paused=false;start=performance.now();render(0)}};render(0);requestAnimationFrame(tick)})()";
+  return"(()=>{const D="+json+",svg=(document.currentScript&&(document.currentScript.closest('svg')||document.currentScript.ownerDocument.querySelector('#motion-svg')||document.currentScript.ownerDocument.documentElement))||document.querySelector('#motion-svg')||document.documentElement,scene=svg.querySelector('#motion-scene');let start=performance.now(),manual=false,paused=false;const C=v=>Math.max(0,Math.min(1,v)),L=(a,b,p)=>(Number(a)||0)+((Number(b)||0)-(Number(a)||0))*p,E=p=>p*p*(3-2*p),pick=(arr,i)=>arr[i]!=null?arr[i]:arr.slice(0,i).reverse().find(v=>v!=null)??arr.find(v=>v!=null);function state(t){let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}return{active,segment}}function hex(value){const text=String(value||'').trim();if(!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(text))return null;if(text.length===4)return'#'+text.slice(1).split('').map(ch=>ch+ch).join('');return text.toLowerCase()}function parseColor(value){if(Array.isArray(value))return value;if(typeof value!=='string')return null;const text=String(value).trim();const normalized=hex(text);if(normalized)return[parseInt(normalized.slice(1,3),16),parseInt(normalized.slice(3,5),16),parseInt(normalized.slice(5,7),16)];const named={white:[255,255,255],black:[0,0,0]};if(named[text.toLowerCase()])return named[text.toLowerCase()];const rgb=text.match(/^rgb\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)$/i);if(rgb)return[rgb[1],rgb[2],rgb[3]].map(Number);const ref=text.match(/^url\\(#([^)]+)\\)$/);if(!ref)return null;const def=svg.querySelector('#'+ref[1]);if(!def)return null;const stops=[...def.querySelectorAll('stop')].map(stop=>parseColor(stop.getAttribute('stop-color'))).filter(Boolean);if(!stops.length)return null;const totals=stops.reduce((acc,color)=>[acc[0]+color[0],acc[1]+color[1],acc[2]+color[2]],[0,0,0]);return totals.map(total=>total/stops.length)}function color(a,b,p){if(p<=0)return a;if(p>=1)return b;if(D.referencedColorInterpolation){const ra=parseColor(a),rb=parseColor(b);if(ra&&rb)return'rgb('+[0,1,2].map(i=>Math.round(L(ra[i],rb[i],p))).join(',')+')'}if(typeof a==='string'||typeof b==='string')return p<0.5?a:b;return'rgb('+[0,1,2].map(i=>Math.round(L(a[i],b[i],p))).join(',')+')'}function path(track,from,to,p){const a=pick(track.paths,from),b=pick(track.paths,to);if(!a||!b)return null;const ta=a.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[],tb=b.match(/[a-zA-Z]|-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/g)||[];let ni=0;const bn=tb.filter(token=>!/^[a-zA-Z]$/.test(token)).map(Number);return ta.map(token=>/^[a-zA-Z]$/.test(token)?token:String(L(Number(token),bn[ni++],p))).join(' ')} ;function topSceneChild(node){let current=node;while(current&&current.parentNode&&current.parentNode!==scene)current=current.parentNode;return current&&current.parentNode===scene?current:null}function render(t){const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:C(t/total)*total;const q=state(t),p=q.segment?E(C((t-q.segment.start)/Math.max(.001,q.segment.end-q.segment.start))):0,from=q.segment?q.segment.from:q.active,to=q.segment?q.segment.to:q.active;for(const tr of D.tracks){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(!el)continue;if(el.hasAttribute('data-refresh-rotor')||el.hasAttribute('data-exact-ring')||el.getAttribute('data-static-connector')==='true')continue;const parent=el.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;const pa=tr.present[from],pb=tr.present[to];if(!pa&&!pb){el.setAttribute('visibility','hidden');continue}el.setAttribute('visibility','visible');const na=pick(tr.numeric,from)||{},nb=pick(tr.numeric,to)||{};for(const name of D.numeric){if(na[name]!=null||nb[name]!=null)el.setAttribute(name,String(L(na[name],nb[name],p)))}const ca=pick(tr.colors,from)||{},cb=pick(tr.colors,to)||{};for(const name of D.colors){if(ca[name]&&cb[name])el.setAttribute(name,color(ca[name],cb[name],p))}if(tr.pathMode){const d=path(tr,from,to,p);if(d)el.setAttribute('d',d)}else if(tr.paths){const d=p<0.5?pick(tr.paths,from):pick(tr.paths,to);if(d)el.setAttribute('d',d)}let transformAttr='';const ma=pick(tr.transforms,from),mb=pick(tr.transforms,to);if(ma&&mb)transformAttr='matrix('+ma.map((v,i)=>L(v,mb[i],p)).join(' ')+')';const ra=pick(tr.rotations,from),rb=pick(tr.rotations,to);if(ra&&rb){let a=ra.angle,b=rb.angle;while(b-a>180)b-=360;while(a-b>180)b+=360;const rotateStr='rotate('+L(a,b,p)+' '+L(ra.cx,rb.cx,p)+' '+L(ra.cy,rb.cy,p)+')';transformAttr=transformAttr?transformAttr+' '+rotateStr:rotateStr;}if(transformAttr)el.setAttribute('transform',transformAttr);if(pa&&!pb)el.setAttribute('opacity',String(1-p));else if(!pa&&pb)el.setAttribute('opacity',String(p))}const sorted=[];const seen=new Set();for(const tr of D.tracks){if(tr.zOrder){const el=scene.querySelector('[data-motion-id=\"'+CSS.escape(tr.id)+'\"]');if(el){const sortable=topSceneChild(el);if(!sortable)continue;const parent=sortable.parentNode;if(parent&&parent.closest&&parent.closest('[data-refresh-rotor],[data-exact-ring]'))continue;if(seen.has(sortable))continue;seen.add(sortable);const za=pick(tr.zOrder,from),zb=pick(tr.zOrder,to);sorted.push({el:sortable,z:L(za,zb,p)})}}}const exactRing=scene.querySelector('[data-exact-ring]');if(exactRing){const connIdx=sorted.findIndex(item=>{const mid=item.el.getAttribute('data-motion-id');return(mid&&mid.includes('vector-1[0]'))||item.el.getAttribute('data-static-connector')==='true'});if(connIdx>=0){sorted.push({el:exactRing,z:sorted[connIdx].z-0.5})}else{sorted.push({el:exactRing,z:20})}}sorted.sort((a,b)=>a.z-b.z);for(const item of sorted)scene.appendChild(item.el)}function tick(now){if(!manual&&!paused)render((now-start)/1000);requestAnimationFrame(tick)}svg.__motionController={seek(t){manual=true;render(Number(t)||0)},play(){manual=false;paused=false;start=performance.now()},pause(){paused=true},restart(){manual=false;paused=false;start=performance.now();render(0)}};render(0);requestAnimationFrame(tick)})()"
+}
 
 function validate(manifest){if(!manifest||manifest.schema!=='svg-motion-lab/figma-manifest@4')throw new Error('Multi-track engine yêu cầu manifest @4.');if(Number(manifest.fidelityMetadataVersion||0)<4||!manifest.capabilities||!manifest.capabilities.embeddedMotionIds)throw new Error('Hãy export lại bằng plugin mới để có embedded motion IDs.');if(!Array.isArray(manifest.states)||manifest.states.length<2)throw new Error('Manifest cần ít nhất 2 states.');return true}
 
@@ -1209,6 +1431,7 @@ function compile(manifest,options){
       }
     }
   });
+  normalizeNestedTrackTransforms(tracks);
 
   const baseSvg=states[0].svg.cloneNode(true);
   baseSvg.querySelectorAll('script').forEach(script=>script.remove());
@@ -1239,7 +1462,40 @@ function compile(manifest,options){
     baseSvg.appendChild(scene)
   }
   cloneMissingTracks(scene,tracks,states);
+  const topSceneChild = (node) => {
+    let current = node;
+    while (current && current.parentNode && current.parentNode !== scene) current = current.parentNode;
+    return current && current.parentNode === scene ? current : null;
+  };
+  const wrapperAwareZOrder = tracks.some(track => {
+    if (!track.zOrder) return false;
+    const split = track.id.indexOf(':@root');
+    const motionPath = split < 0 ? track.id : track.id.slice(split + 1);
+    if (motionPath !== '@root/active[0]') return false;
+    const el = scene.querySelector('[data-motion-id="' + CSS.escape(track.id) + '"]');
+    if (!el) return false;
+    const sortable = topSceneChild(el);
+    return sortable && sortable !== el && !sortable.getAttribute('data-motion-id');
+  });
+  const referencedColorInterpolation = tracks.some(track => {
+    const split = track.id.indexOf(':@root');
+    const motionPath = split < 0 ? track.id : track.id.slice(split + 1);
+    if (!/^@root\/line\[\d+\]$/.test(motionPath)) return false;
+    const values = [];
+    for (const colors of track.colors || []) {
+      if (!colors) continue;
+      Object.values(colors).forEach(value => {
+        if (value != null) values.push(value);
+      });
+    }
+    const hasReferencePaint = values.some(value => typeof value === 'string' && /^url\(#/.test(value));
+    const hasSolidColor = values.some(value => Array.isArray(value));
+    return hasReferencePaint && hasSolidColor;
+  });
+  normalizeEquivalentPaintRefsInTracks(tracks, baseSvg);
   const data={duration:schedule.totalDuration,infinite:schedule.infinite,numeric:NUMERIC,colors:COLOR,segments:schedule.segments.map(segment=>({from:schedule.stateIds.indexOf(segment.from),to:schedule.stateIds.indexOf(segment.to),start:segment.transitionStart,end:segment.transitionEnd})),tracks};
+  if (wrapperAwareZOrder) data.wrapperAwareZOrder = true;
+  if (referencedColorInterpolation) data.referencedColorInterpolation = true;
   const script=document.createElementNS(SVG_NS,'script');
   script.textContent=runtime(data);
   baseSvg.appendChild(script);

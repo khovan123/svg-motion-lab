@@ -1,0 +1,175 @@
+{
+  "version": 5,
+  "startStateId": "1:4566",
+  "stateOrder": [
+    "1:4566",
+    "1:4585",
+    "1:4604",
+    "1:4623",
+    "1:4642",
+    "1:4661",
+    "1:4680",
+    "1:4699",
+    "1:4718",
+    "1:4737"
+  ],
+  "playback": {
+    "infinite": true,
+    "totalDuration": 11.000000119209291,
+    "segments": [
+      {
+        "from": "1:4566",
+        "to": "1:4585",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4566:0",
+        "transitionStart": 0.8,
+        "transitionEnd": 1.100000011920929
+      },
+      {
+        "from": "1:4585",
+        "to": "1:4604",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4585:1",
+        "transitionStart": 1.900000011920929,
+        "transitionEnd": 2.200000023841858
+      },
+      {
+        "from": "1:4604",
+        "to": "1:4623",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4604:2",
+        "transitionStart": 3.0000000238418583,
+        "transitionEnd": 3.300000035762787
+      },
+      {
+        "from": "1:4623",
+        "to": "1:4642",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4623:3",
+        "transitionStart": 4.100000035762787,
+        "transitionEnd": 4.400000047683716
+      },
+      {
+        "from": "1:4642",
+        "to": "1:4661",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4642:4",
+        "transitionStart": 5.200000047683716,
+        "transitionEnd": 5.500000059604645
+      },
+      {
+        "from": "1:4661",
+        "to": "1:4680",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4661:5",
+        "transitionStart": 6.300000059604645,
+        "transitionEnd": 6.6000000715255736
+      },
+      {
+        "from": "1:4680",
+        "to": "1:4699",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4680:6",
+        "transitionStart": 7.400000071525573,
+        "transitionEnd": 7.700000083446502
+      },
+      {
+        "from": "1:4699",
+        "to": "1:4718",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4699:7",
+        "transitionStart": 8.500000083446503,
+        "transitionEnd": 8.800000095367432
+      },
+      {
+        "from": "1:4718",
+        "to": "1:4737",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4718:8",
+        "transitionStart": 9.600000095367433,
+        "transitionEnd": 9.900000107288362
+      },
+      {
+        "from": "1:4737",
+        "to": "1:4566",
+        "hold": 0.8,
+        "duration": 0.30000001192092896,
+        "easing": {
+          "type": "EASE_OUT"
+        },
+        "reactionId": "1:4737:9",
+        "transitionStart": 10.700000107288362,
+        "transitionEnd": 11.000000119209291
+      }
+    ]
+  },
+  "smartAnimate": {
+    "renderMode": "multi-track-smart-animate",
+    "totalTracks": 21,
+    "pathMorphTracks": 19,
+    "transformTracks": 21,
+    "rotationTracks": 21,
+    "colorTracks": 21,
+    "presenceTracks": 18,
+    "fullStateSnapshots": 0,
+    "embeddedMotionIds": true,
+    "genericAnimationTypes": [
+      "numeric-geometry",
+      "translate",
+      "scale",
+      "matrix-transform",
+      "rotation",
+      "opacity",
+      "visibility",
+      "solid-color",
+      "path-morph",
+      "appear-disappear"
+    ],
+    "connectorStatic": true,
+    "refreshRotationTrack": true,
+    "pieFallbackSwap": true,
+    "status": "ok",
+    "semanticTracks": 21,
+    "pathMorphs": 19,
+    "subtreeFallbacks": 0,
+    "runtimeSyntaxRepaired": true,
+    "staticRotationTracksSkipped": true
+  },
+  "status": "ok"
+}

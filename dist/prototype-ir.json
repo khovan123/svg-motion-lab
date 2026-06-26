@@ -1,74 +1,48 @@
 {
   "version": 5,
-  "startStateId": "1:4530",
+  "startStateId": "1:4797",
   "stateOrder": [
-    "1:4530",
-    "1:4512",
-    "1:4494",
-    "1:4476"
+    "1:4797",
+    "1:4960"
   ],
   "playback": {
     "infinite": true,
-    "totalDuration": 4.001000059604645,
+    "totalDuration": 10.003000000094994,
     "segments": [
       {
-        "from": "1:4530",
-        "to": "1:4512",
-        "hold": 0.4000000059604645,
-        "duration": 0.800000011920929,
+        "from": "1:4797",
+        "to": "1:4960",
+        "hold": 0.0010000000474974513,
+        "duration": 10,
         "easing": {
-          "type": "EASE_OUT"
+          "type": "LINEAR"
         },
-        "reactionId": "1:4530:0",
-        "transitionStart": 0.4000000059604645,
-        "transitionEnd": 1.2000000178813934
+        "reactionId": "1:4797:0",
+        "transitionStart": 0.0010000000474974513,
+        "transitionEnd": 10.001000000047497
       },
       {
-        "from": "1:4512",
-        "to": "1:4494",
-        "hold": 0.4000000059604645,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_OUT"
-        },
-        "reactionId": "1:4512:1",
-        "transitionStart": 1.600000023841858,
-        "transitionEnd": 2.400000035762787
-      },
-      {
-        "from": "1:4494",
-        "to": "1:4476",
-        "hold": 0.4000000059604645,
-        "duration": 0.800000011920929,
-        "easing": {
-          "type": "EASE_OUT"
-        },
-        "reactionId": "1:4494:2",
-        "transitionStart": 2.8000000417232513,
-        "transitionEnd": 3.6000000536441803
-      },
-      {
-        "from": "1:4476",
-        "to": "1:4530",
-        "hold": 0.4000000059604645,
+        "from": "1:4960",
+        "to": "1:4797",
+        "hold": 0.0010000000474974513,
         "duration": 0.001,
         "easing": {
-          "type": "EASE_OUT"
+          "type": "LINEAR"
         },
-        "reactionId": "1:4476:3",
-        "transitionStart": 4.000000059604645,
-        "transitionEnd": 4.001000059604645
+        "reactionId": "1:4960:1",
+        "transitionStart": 10.002000000094995,
+        "transitionEnd": 10.003000000094994
       }
     ]
   },
   "smartAnimate": {
     "renderMode": "multi-track-smart-animate",
-    "totalTracks": 18,
-    "pathMorphTracks": 14,
-    "transformTracks": 18,
-    "rotationTracks": 18,
-    "colorTracks": 15,
-    "presenceTracks": 0,
+    "totalTracks": 94,
+    "pathMorphTracks": 0,
+    "transformTracks": 94,
+    "rotationTracks": 94,
+    "colorTracks": 92,
+    "presenceTracks": 94,
     "fullStateSnapshots": 0,
     "embeddedMotionIds": true,
     "genericAnimationTypes": [
@@ -87,8 +61,8 @@
     "refreshRotationTrack": true,
     "pieFallbackSwap": true,
     "status": "ok",
-    "semanticTracks": 18,
-    "pathMorphs": 14,
+    "semanticTracks": 94,
+    "pathMorphs": 0,
     "subtreeFallbacks": 0,
     "runtimeSyntaxRepaired": true,
     "staticRotationTracksSkipped": true
