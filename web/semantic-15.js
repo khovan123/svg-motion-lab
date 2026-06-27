@@ -1375,7 +1375,7 @@ function compile(manifest,options){
   manifest=normalized;
   options=options||{};
   const base=options.baseSchedule||S.buildBaseSchedule(manifest),schedule=S.customSchedule(base,options.customSegments,options.infinite);
-  const ordered=schedule.stateIds.map(id=>manifest.states.find(state=>state.id===id)).filter(Boolean),states=ordered.map(parseState),layerMaps=ordered.map(layerMap),ids=new Set();
+   const ordered=schedule.stateIds.map(id=>manifest.states.find(state=>state.id===id)).filter(Boolean),states=ordered.map(parseState),layerMaps=ordered.map(layerMap),ids=new Set();
   states.forEach(state=>state.map.forEach((_,id)=>ids.add(id)));
   const tracks=[...ids].map(id=>buildTrack(id,states.map(state=>state.map.get(id)||null),layerMaps.map(map=>map.get(id)||null),states)).filter(Boolean);
   

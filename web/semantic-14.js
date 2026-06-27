@@ -103,6 +103,7 @@ function repair(result,manifest){
   const stateById=new Map((manifestToUse.states||[]).map(state=>[state.id,state]));
   const exactRoot=documentNode.createElementNS(SVG_NS,'g');
   exactRoot.setAttribute('data-exact-ring','true');
+  const defs = svg.querySelector('defs') || svg.insertBefore(documentNode.createElementNS(SVG_NS, 'defs'), svg.firstChild);
   result.schedule.stateIds.forEach((stateId,index)=>{
     const state=stateById.get(stateId);
     if(!state)return;
@@ -111,6 +112,16 @@ function repair(result,manifest){
     wrapper.setAttribute('data-ring-state',String(index));
     wrapper.setAttribute('visibility',index===0?'visible':'hidden');
     wrapper.setAttribute('opacity',index===0?'1':'0');
+    [...source.children].forEach(child=>{
+      if(String(child.tagName).toLowerCase()==='mask'){
+        const maskClone=child.cloneNode(true);
+        const oldId=maskClone.getAttribute('id');
+        if(oldId){
+          maskClone.setAttribute('id',oldId+'_state'+index);
+          defs.appendChild(documentNode.importNode(maskClone,true));
+        }
+      }
+    });
     ringElements(source).forEach(element=>{
       const clone=element.cloneNode(true);
       clone.removeAttribute('data-motion-id');
@@ -121,6 +132,13 @@ function repair(result,manifest){
           exactRoot.appendChild(documentNode.importNode(clone,true));
         }
       } else {
+        [...clone.querySelectorAll('*'),clone].forEach(el=>{
+          ['mask','clip-path','fill','stroke','filter'].forEach(name=>{
+            if(el.hasAttribute(name)){
+              el.setAttribute(name,el.getAttribute(name).replace(/url\(#(mask\d+_motion_shared)\)/g,'url(#$1_state'+index+')'));
+            }
+          });
+        });
         wrapper.appendChild(documentNode.importNode(clone,true));
       }
     });
