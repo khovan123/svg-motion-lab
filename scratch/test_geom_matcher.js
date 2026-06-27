@@ -1,0 +1,285 @@
+const fs = require('fs');
+const { JSDOM } = require('jsdom');
+const manifest = JSON.parse(fs.readFileSync('motion-manifest.json', 'utf8'));
+
+const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>");
+const { window } = dom;
+global.DOMParser = window.DOMParser;
+global.XMLSerializer = window.XMLSerializer;
+
+function parseTransform(value) {
+  const text = String(value || '').trim();
+  if (!text) return [1, 0, 0, 1, 0, 0];
+  let m;
+  if ((m = text.match(/^matrix\(\s*([-+\deE.]+)[ ,]+([-+\deE.]+)[ ,]+([-+\deE.]+)[ ,]+([-+\deE.]+)[ ,]+([-+\deE.]+)[ ,]+([-+\deE.]+)\s*\)$/))) return m.slice(1).map(Number);
+  if ((m = text.match(/^translate\(\s*([-+\deE.]+)(?:[ ,]+([-+\deE.]+))?\s*\)$/))) return [1, 0, 0, 1, Number(m[1]), Number(m[2] || 0)];
+  if ((m = text.match(/^scale\(\s*([-+\deE.]+)(?:[ ,]+([-+\deE.]+))?\s*\)$/))) {
+    const x = Number(m[1]), y = Number(m[2] || m[1]);
+    return [x, 0, 0, y, 0, 0];
+  }
+  return [1, 0, 0, 1, 0, 0];
+}
+
+function getElementTransform(el) {
+  let matrix = [1, 0, 0, 1, 0, 0];
+  let current = el;
+  const list = [];
+  while (current && current.tagName && current.tagName.toLowerCase() !== 'svg') {
+    list.unshift(current);
+    current = current.parentNode;
+  }
+  const multiply = (m1, m2) => [
+    m1[0] * m2[0] + m1[2] * m2[1],
+    m1[1] * m2[0] + m1[3] * m2[1],
+    m1[0] * m2[2] + m1[2] * m2[3],
+    m1[1] * m2[2] + m1[3] * m2[3],
+    m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+    m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
+  ];
+  list.forEach(node => {
+    const tStr = node.getAttribute('transform');
+    if (tStr) {
+      const m = parseTransform(tStr);
+      if (m) matrix = multiply(matrix, m);
+    }
+  });
+  return matrix;
+}
+
+function getPathBounds(d) {
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) || [];
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let cx = 0, cy = 0;
+  const update = (x, y) => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  };
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (/^[a-zA-Z]$/.test(token)) {
+      const cmd = token;
+      i++;
+      if (cmd === 'M' || cmd === 'L' || cmd === 'T') {
+        cx = Number(tokens[i++]); cy = Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'm' || cmd === 'l' || cmd === 't') {
+        cx += Number(tokens[i++]); cy += Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'H') {
+        cx = Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'h') {
+        cx += Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'V') {
+        cy = Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'v') {
+        cy += Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'C') {
+        const x1 = Number(tokens[i++]), y1 = Number(tokens[i++]);
+        const x2 = Number(tokens[i++]), y2 = Number(tokens[i++]);
+        cx = Number(tokens[i++]); cy = Number(tokens[i++]);
+        update(x1, y1); update(x2, y2); update(cx, cy);
+      } else if (cmd === 'c') {
+        const x1 = cx + Number(tokens[i++]), y1 = cy + Number(tokens[i++]);
+        const x2 = cx + Number(tokens[i++]), y2 = cy + Number(tokens[i++]);
+        cx += Number(tokens[i++]); cy += Number(tokens[i++]);
+        update(x1, y1); update(x2, y2); update(cx, cy);
+      } else if (cmd === 'S') {
+        const x2 = Number(tokens[i++]), y2 = Number(tokens[i++]);
+        cx = Number(tokens[i++]); cy = Number(tokens[i++]);
+        update(x2, y2); update(cx, cy);
+      } else if (cmd === 's') {
+        const x2 = cx + Number(tokens[i++]), y2 = cy + Number(tokens[i++]);
+        cx += Number(tokens[i++]); cy += Number(tokens[i++]);
+        update(x2, y2); update(cx, cy);
+      } else if (cmd === 'Q') {
+        const x1 = Number(tokens[i++]), y1 = Number(tokens[i++]);
+        cx = Number(tokens[i++]); cy = Number(tokens[i++]);
+        update(x1, y1); update(cx, cy);
+      } else if (cmd === 'q') {
+        const x1 = cx + Number(tokens[i++]), y1 = cy + Number(tokens[i++]);
+        cx += Number(tokens[i++]); cy += Number(tokens[i++]);
+        update(x1, y1); update(cx, cy);
+      } else if (cmd === 'A') {
+        const rx = Number(tokens[i++]), ry = Number(tokens[i++]);
+        const rot = Number(tokens[i++]), laf = Number(tokens[i++]), sf = Number(tokens[i++]);
+        cx = Number(tokens[i++]); cy = Number(tokens[i++]);
+        update(cx, cy);
+      } else if (cmd === 'a') {
+        const rx = Number(tokens[i++]), ry = Number(tokens[i++]);
+        const rot = Number(tokens[i++]), laf = Number(tokens[i++]), sf = Number(tokens[i++]);
+        cx += Number(tokens[i++]); cy += Number(tokens[i++]);
+        update(cx, cy);
+      }
+    } else {
+      i++;
+    }
+  }
+  if (minX === Infinity) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function getAbsoluteBounds(el) {
+  let local = null;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'rect') {
+    local = {
+      x: Number(el.getAttribute('x') || 0),
+      y: Number(el.getAttribute('y') || 0),
+      width: Number(el.getAttribute('width') || 0),
+      height: Number(el.getAttribute('height') || 0)
+    };
+  } else if (tag === 'circle') {
+    const cx = Number(el.getAttribute('cx') || 0);
+    const cy = Number(el.getAttribute('cy') || 0);
+    const r = Number(el.getAttribute('r') || 0);
+    local = { x: cx - r, y: cy - r, width: 2*r, height: 2*r };
+  } else if (tag === 'ellipse') {
+    const cx = Number(el.getAttribute('cx') || 0);
+    const cy = Number(el.getAttribute('cy') || 0);
+    const rx = Number(el.getAttribute('rx') || 0);
+    const ry = Number(el.getAttribute('ry') || 0);
+    local = { x: cx - rx, y: cy - ry, width: 2*rx, height: 2*ry };
+  } else if (tag === 'path') {
+    local = getPathBounds(el.getAttribute('d') || '');
+  } else if (tag === 'g') {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    Array.from(el.children).forEach(child => {
+      if (['rect', 'circle', 'ellipse', 'path', 'g'].includes(child.tagName.toLowerCase())) {
+        const cb = getAbsoluteBounds(child);
+        if (cb) {
+          if (cb.x < minX) minX = cb.x;
+          if (cb.x + cb.width > maxX) maxX = cb.x + cb.width;
+          if (cb.y < minY) minY = cb.y;
+          if (cb.y + cb.height > maxY) maxY = cb.y + cb.height;
+        }
+      }
+    });
+    if (minX !== Infinity) {
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
+    return null;
+  }
+  
+  if (!local) return null;
+  
+  const m = getElementTransform(el);
+  const corners = [
+    [local.x, local.y],
+    [local.x + local.width, local.y],
+    [local.x, local.y + local.height],
+    [local.x + local.width, local.y + local.height]
+  ];
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  corners.forEach(([lx, ly]) => {
+    const tx = m[0] * lx + m[2] * ly + m[4];
+    const ty = m[1] * lx + m[3] * ly + m[5];
+    if (tx < minX) minX = tx;
+    if (tx > maxX) maxX = tx;
+    if (ty < minY) minY = ty;
+    if (ty > maxY) maxY = ty;
+  });
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function isTagCompatible(tag, type) {
+  tag = tag.toLowerCase();
+  if (type === 'RECTANGLE') return tag === 'rect' || tag === 'path';
+  if (type === 'ELLIPSE') return tag === 'ellipse' || tag === 'circle' || tag === 'path';
+  if (['VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON'].includes(type)) return tag === 'path';
+  if (type === 'TEXT') return tag === 'text' || tag === 'g';
+  if (['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'].includes(type)) return tag === 'g';
+  return false;
+}
+
+function matchGeometry(state) {
+  const doc = new DOMParser().parseFromString(state.svg, 'image/svg+xml');
+  const rootSvg = doc.documentElement;
+  
+  // Clean all existing data-motion-id attributes in the SVG DOM first
+  rootSvg.querySelectorAll('[data-motion-id]').forEach(el => el.removeAttribute('data-motion-id'));
+
+  const matchedNodes = new Map(); // stableNodeId -> SVGElement
+  
+  // Find top level g (usually #motion-scene) or fallback to rootSvg
+  const scene = rootSvg.querySelector('#motion-scene') || rootSvg;
+  
+  const extractPath = (id) => {
+    if (!id) return null;
+    const split = id.indexOf(':@root');
+    return split < 0 ? id : id.slice(split + 1);
+  };
+
+  // Root is always matched to scene
+  const rootLayer = state.layers.find(l => extractPath(l.stableNodeId) === '@root');
+  if (rootLayer) {
+    matchedNodes.set(rootLayer.stableNodeId, scene);
+  }
+
+  // Sort layers so parents are processed before children
+  const sortedLayers = [...state.layers].filter(l => extractPath(l.stableNodeId) !== '@root').sort((a, b) => {
+    return extractPath(a.stableNodeId).split('/').length - extractPath(b.stableNodeId).split('/').length;
+  });
+
+  const matchedElementsSet = new Set();
+
+  sortedLayers.forEach(layer => {
+    const parentId = layer.parentStableNodeId;
+    const parentEl = matchedNodes.get(parentId) || scene;
+
+    // Find all descendant elements of parentEl
+    const candidates = [];
+    const walkDOM = (node) => {
+      if (node !== parentEl && node.tagName) {
+        candidates.push(node);
+      }
+      Array.from(node.children).forEach(walkDOM);
+    };
+    walkDOM(parentEl);
+
+    // Filter candidates by:
+    // 1. Tag compatibility
+    // 2. Bounding box similarity
+    // 3. Not already matched
+    const bestCandidates = candidates.filter(el => {
+      if (matchedElementsSet.has(el)) return false;
+      if (!isTagCompatible(el.tagName, layer.type)) return false;
+      const bSVG = getAbsoluteBounds(el);
+      if (!bSVG) return false;
+      
+      const bLayer = layer.bounds;
+      const dx = Math.abs(bSVG.x - bLayer.x);
+      const dy = Math.abs(bSVG.y - bLayer.y);
+      const dw = Math.abs(bSVG.width - bLayer.width);
+      const dh = Math.abs(bSVG.height - bLayer.height);
+      
+      // Bounding boxes must match within 2.5 pixels
+      return dx < 2.5 && dy < 2.5 && dw < 2.5 && dh < 2.5;
+    });
+
+    if (bestCandidates.length > 0) {
+      // Pick the first candidate (closest in DOM structure)
+      const matchedEl = bestCandidates[0];
+      matchedNodes.set(layer.stableNodeId, matchedEl);
+      matchedElementsSet.add(matchedEl);
+      matchedEl.setAttribute('data-motion-id', layer.stableNodeId);
+      console.log(`Matched layer "${layer.name}" (${layer.stableNodeId}) to <${matchedEl.tagName}>`);
+    } else {
+      console.log(`[Warning] Could not match layer "${layer.name}" (${layer.stableNodeId})`);
+    }
+  });
+
+  return new XMLSerializer().serializeToString(rootSvg);
+}
+
+console.log("Running Geometry Matcher on State 2...");
+matchGeometry(manifest.states[2]);

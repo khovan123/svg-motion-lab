@@ -1,0 +1,43 @@
+const fs = require('fs');
+const { JSDOM } = require('jsdom');
+const vm = require('vm');
+
+const svg = fs.readFileSync('dist/animation.svg', 'utf8');
+const doc = new JSDOM(svg, { contentType: 'image/svg+xml' }).window.document;
+const scriptEl = doc.querySelector('script');
+const scriptText = scriptEl ? scriptEl.textContent : '';
+
+const modifiedScript = scriptText.replace('const D=', 'window.D=');
+
+const sandbox = { 
+  window: {}, 
+  document: { 
+    currentScript: { 
+      closest: () => null 
+    },
+    querySelector: () => null
+  },
+  requestAnimationFrame: () => {},
+  performance: { now: () => 0 }
+};
+sandbox.document.ownerDocument = sandbox.document;
+
+vm.createContext(sandbox);
+try {
+  vm.runInContext(modifiedScript, sandbox);
+} catch (e) {
+  // Ignore
+}
+
+const D = sandbox.window.D;
+if (D) {
+  console.log("Intercepted D!");
+  D.tracks.forEach(t => {
+    if (t.id.includes('giao-bi') || t.id.includes('thc-hin') || t.id.includes('-np') || t.id.includes('icon') || t.id.includes('active') || t.id.includes('bar')) {
+      console.log(`Track: "${t.id}"`);
+      console.log(`  zOrder: ${JSON.stringify(t.zOrder)}`);
+    }
+  });
+} else {
+  console.log("Failed to intercept D!");
+}

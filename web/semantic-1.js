@@ -24,7 +24,7 @@ S.buildBaseSchedule=manifest=>{
   const reaction=reactions.find(r=>r.sourceStateId===current&&r.trigger&&r.trigger.type==='AFTER_TIMEOUT'&&S.actionOf(r));if(!reaction)break;
   const action=S.actionOf(reaction),next=action.destinationStateId||action.destinationId;if(!byId.has(next))break;
   const transition=action.transition||null;
-  const duration=Math.max(.001,transition?S.num(transition.duration,lastDuration):lastDuration);
+  const duration=Math.max(.001,transition?(transition.type==='INSTANT'?0.001:S.num(transition.duration,lastDuration)):0.001);
   const easing=transition&&transition.easing?transition.easing:lastEasing;
   segments.push({from:current,to:next,hold:Math.max(0,S.num(reaction.trigger.timeout,.7)),duration,easing,reactionId:reaction.id||null});
   lastDuration=duration;lastEasing=easing;current=next;

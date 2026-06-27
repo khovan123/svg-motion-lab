@@ -8,5 +8,8 @@
     "build": "node compile.js --manifest motion-manifest.json",
     "build:example": "node compile.js --manifest fixtures/motion-manifest.example.json",
     "test": "node test/compiler.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
   }
 }
