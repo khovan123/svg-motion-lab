@@ -5,7 +5,7 @@
   "scripts": {
     "start": "npx serve web",
     "dev": "npx serve web",
-    "build": "node compile.js --manifest motion-manifest.json",
+    "build": "node compile.js --manifest motion-manifest.json && node fix-transforms.js dist/animation.html",
     "build:example": "node compile.js --manifest fixtures/motion-manifest.example.json",
     "test": "node test/compiler.test.js"
   },

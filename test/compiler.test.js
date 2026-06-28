@@ -153,7 +153,7 @@ function getPathBounds(d) {
   };
 }
 
-const rootManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../motion-manifest.json"), "utf8"));
+const rootManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/progress-bar-manifest.json"), "utf8"));
 const rootResult = compileManifest(rootManifest);
 const rootRuntimeMatch = rootResult.svg.match(/const D=(\{.*?\}),svg=/s);
 assert.ok(rootRuntimeMatch, "root manifest should embed runtime data");

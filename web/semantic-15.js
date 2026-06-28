@@ -149,11 +149,17 @@ function getAbsoluteBounds(el) {
     local = { x: cx - rx, y: cy - ry, width: 2*rx, height: 2*ry };
   } else if (tag === 'path') {
     local = getPathBounds(el.getAttribute('d') || '');
+  } else if (tag === 'text') {
+    if (typeof el.getBBox === 'function') {
+      const box = el.getBBox();
+      local = { x: box.x, y: box.y, width: box.width, height: box.height };
+    }
   } else if (tag === 'g') {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     Array.from(el.children).forEach(child => {
-      if (['rect', 'circle', 'ellipse', 'path', 'g'].includes(child.tagName.toLowerCase())) {
+      const childTag = child.tagName.toLowerCase();
+      if (['rect', 'circle', 'ellipse', 'path', 'g', 'text'].includes(childTag)) {
         const cb = getAbsoluteBounds(child);
         if (cb) {
           if (cb.x < minX) minX = cb.x;
@@ -567,7 +573,6 @@ function normalizeEquivalentPaintRefsInTracks(tracks, rootSvg) {
 function matchGeometryGloballyV2(state) {
   const doc = new DOMParser().parseFromString(state.svg, 'image/svg+xml');
   const rootSvg = doc.documentElement;
-  mergeDuplicateFillAndStrokePaths(rootSvg);
 
   // Convert all rect elements to paths to avoid tag mismatch in buildTrack
   rootSvg.querySelectorAll('rect').forEach(rect => {
@@ -592,6 +597,8 @@ function matchGeometryGloballyV2(state) {
       path.setAttribute('d', normalizePath(d));
     }
   });
+
+  mergeDuplicateFillAndStrokePaths(rootSvg);
 
   // Group container background paths at x=145, y=149 into a single <g>
   const containerEls = [];
@@ -659,6 +666,13 @@ function matchGeometryGloballyV2(state) {
 
   const matchedElementsSet = new Set();
   matchedElementsSet.add(scene);
+  if (scene.tagName.toLowerCase() === 'svg') {
+    Array.from(scene.children).forEach(child => {
+      if (child.tagName.toLowerCase() === 'g') {
+        matchedElementsSet.add(child);
+      }
+    });
+  }
 
   // Pass 1: Match exact bounds
   leafLayers.forEach(layer => {
@@ -794,6 +808,31 @@ function matchGeometryGloballyV2(state) {
       matchedNodes.set(layer.stableNodeId, matchedGroup);
       matchedElementsSet.add(matchedGroup);
       matchedGroup.setAttribute('data-motion-id', layer.stableNodeId);
+      // Match child layers (e.g., badge text) inside this group
+      const childLayers = state.layers.filter(l => l.parentStableNodeId === layer.stableNodeId);
+      childLayers.forEach(childLayer => {
+        if (matchedNodes.has(childLayer.stableNodeId)) return;
+        const candidates = Array.from(matchedGroup.querySelectorAll('*')).filter(el => !matchedElementsSet.has(el));
+        let best = null;
+        let bestScore = Infinity;
+        candidates.forEach(el => {
+          if (!isTagCompatible(el.tagName, childLayer.type)) return;
+          const bSVG = getAbsoluteBounds(el);
+          const bLayer = childLayer.bounds;
+          if (!bSVG || !bLayer) return;
+          const diff = Math.abs(bSVG.x - bLayer.x) + Math.abs(bSVG.y - bLayer.y) +
+                     Math.abs(bSVG.width - bLayer.width) + Math.abs(bSVG.height - bLayer.height);
+          if (diff < bestScore) {
+            bestScore = diff;
+            best = el;
+          }
+        });
+        if (best) {
+          matchedNodes.set(childLayer.stableNodeId, best);
+          matchedElementsSet.add(best);
+          best.setAttribute('data-motion-id', childLayer.stableNodeId);
+        }
+      });
     } else {
       let bestMatch = null;
       let minDiff = Infinity;
@@ -1089,14 +1128,42 @@ function compatiblePaths(paths){const valid=paths.filter(Boolean);if(valid.lengt
 function parseTransformMatrix(value){return parseTransform(value)}
 function layerRotation(layer){if(!layer)return null;const b=layer.bounds||{};return{angle:Number(layer.rotation)||0,cx:(Number(b.x)||0)+(Number(b.width)||0)/2,cy:(Number(b.y)||0)+(Number(b.height)||0)/2}}
 
+function stripPrefix(id) {
+  if (!id) return '';
+  const idx = id.indexOf('@root');
+  return idx >= 0 ? id.substring(idx) : id;
+}
+
+function getDomParentLayer(layer, state, node) {
+  if (!node) return null;
+  let parent = node.parentNode;
+  while (parent && parent.tagName && parent.tagName.toLowerCase() !== 'svg') {
+    if (parent.getAttribute && parent.getAttribute('data-motion-id')) {
+      const parentId = parent.getAttribute('data-motion-id');
+      const parentLayer = state.layers.find(l => stripPrefix(l.stableNodeId) === stripPrefix(parentId));
+      if (parentLayer) return parentLayer;
+    }
+    parent = parent.parentNode;
+  }
+  return null;
+}
+
 function getLayerParent(layer, state) {
   if (!layer || !layer.parentStableNodeId) return null;
-  return state.layers.find(l => l.stableNodeId === layer.parentStableNodeId);
+  return state.layers.find(l => stripPrefix(l.stableNodeId) === stripPrefix(layer.parentStableNodeId));
 }
 
 function buildTrack(id,nodes,layers,states){
   const present = layers.map((layer, idx) => {
-    return nodes[idx] !== null;
+    // Element is in the SVG DOM — definitively present
+    if (nodes[idx] !== null) return true;
+    // Element is absent from SVG but the layer EXISTS in the manifest with valid bounds.
+    // This happens when the element is clipped off-screen (e.g. cards in a scrolling carousel).
+    // The synthetic transform calculation below will position it correctly off-screen.
+    // Do NOT fade it — that would cause badge/card children to disappear mid-transition.
+    if (layer !== null && layer.bounds != null) return true;
+    // Layer is truly absent from this state (no manifest entry)
+    return false;
   });
   const actualBaseIndex = nodes.map(Boolean).indexOf(true);
   const base = nodes[actualBaseIndex];
@@ -1158,8 +1225,31 @@ function buildTrack(id,nodes,layers,states){
     if (baseLayer && targetLayer && baseLayer.bounds && targetLayer.bounds) {
       const sw = targetLayer.bounds.width / (baseLayer.bounds.width || 0.001);
       const sh = targetLayer.bounds.height / (baseLayer.bounds.height || 0.001);
-      const tx = targetLayer.bounds.x - sw * baseLayer.bounds.x;
-      const ty = targetLayer.bounds.y - sh * baseLayer.bounds.y;
+      
+      const baseState = states[actualBaseIndex].state;
+      const baseParent = getDomParentLayer(baseLayer, baseState, base);
+      
+      let baseParentX = 0, baseParentY = 0;
+      let targetParentX = 0, targetParentY = 0;
+      
+      if (baseParent) {
+        baseParentX = baseParent.bounds.x;
+        baseParentY = baseParent.bounds.y;
+        
+        const targetParent = states[idx].state.layers.find(l => stripPrefix(l.stableNodeId) === stripPrefix(baseParent.stableNodeId));
+        if (targetParent && targetParent.bounds) {
+          targetParentX = targetParent.bounds.x;
+          targetParentY = targetParent.bounds.y;
+        }
+      }
+      
+      const relativeBaseX = baseLayer.bounds.x - baseParentX;
+      const relativeBaseY = baseLayer.bounds.y - baseParentY;
+      const relativeTargetX = targetLayer.bounds.x - targetParentX;
+      const relativeTargetY = targetLayer.bounds.y - targetParentY;
+      
+      const tx = relativeTargetX - sw * relativeBaseX;
+      const ty = relativeTargetY - sh * relativeBaseY;
       
       const a = baseTransform[0], b = baseTransform[1], c = baseTransform[2], d = baseTransform[3], e = baseTransform[4], f = baseTransform[5];
       return [
@@ -1181,7 +1271,7 @@ function buildTrack(id,nodes,layers,states){
   const zOrder = states.map((s, idx) => {
     const layer = layers[idx];
     if (layer) {
-      return s.state.layers.findIndex(l => l.stableNodeId === id);
+      return s.state.layers.findIndex(l => stripPrefix(l.stableNodeId) === stripPrefix(id));
     }
     const baseLayer = layers[actualBaseIndex];
     if (baseLayer) {
@@ -1189,7 +1279,7 @@ function buildTrack(id,nodes,layers,states){
       const baseParent = getLayerParent(baseLayer, baseState);
       if (baseParent) {
         const parentId = baseParent.stableNodeId;
-        const targetParentIdx = s.state.layers.findIndex(l => l.stableNodeId === parentId);
+        const targetParentIdx = s.state.layers.findIndex(l => stripPrefix(l.stableNodeId) === stripPrefix(parentId));
         if (targetParentIdx >= 0) {
           return targetParentIdx;
         }
@@ -1198,13 +1288,34 @@ function buildTrack(id,nodes,layers,states){
     return 0;
   });
 
-  return{id,baseIndex:actualBaseIndex,tag:String(base.tagName).toLowerCase(),present,numeric,colors,paths,pathMode,transforms,rotations,zOrder}
+  // hasDomNode: true if the base-state node is a real SVG element (not synthetic/off-screen).
+  // Used by normalizeNestedTrackTransforms to skip normalization against purely synthetic ancestors.
+  const hasDomNode = nodes[actualBaseIndex] !== null;
+
+  return{id,baseIndex:actualBaseIndex,hasDomNode,tag:String(base.tagName).toLowerCase(),present,numeric,colors,paths,pathMode,transforms,rotations,zOrder}
 }
 
 function cloneMissingTracks(scene,tracks,states){
-  tracks.forEach(track=>{
+  const getDomDepth = (node) => {
+    let depth = 0;
+    let curr = node;
+    while (curr && curr.parentNode) {
+      depth++;
+      curr = curr.parentNode;
+    }
+    return depth;
+  };
+
+  const sortedTracks = [...tracks].map(track => {
+    const source = track.baseIndex !== 0 ? states[track.baseIndex].map.get(track.id) : null;
+    return { track, source, depth: source ? getDomDepth(source) : 9999 };
+  }).sort((a, b) => a.depth - b.depth);
+
+  sortedTracks.forEach(({ track, source }) => {
     if(track.baseIndex===0)return;
-    const source=states[track.baseIndex].map.get(track.id);
+    if (scene.querySelector('[data-motion-id="' + CSS.escape(track.id) + '"]')) {
+      return;
+    }
     if(!source)return;
     const clone=source.cloneNode(true);
     clone.setAttribute('data-motion-id',track.id);
@@ -1214,7 +1325,7 @@ function cloneMissingTracks(scene,tracks,states){
     
     let parentNode = source.parentNode;
     let targetParent = null;
-    while (parentNode && parentNode.tagName && parentNode.tagName.toLowerCase() !== 'svg') {
+    while (parentNode && parentNode.parentNode && parentNode.tagName && parentNode.tagName.toLowerCase() !== 'svg') {
       if (parentNode.getAttribute && parentNode.getAttribute('data-motion-id')) {
         const parentId = parentNode.getAttribute('data-motion-id');
         targetParent = scene.querySelector('[data-motion-id="' + CSS.escape(parentId) + '"]');
@@ -1270,10 +1381,37 @@ function normalizeNestedTrackTransforms(tracks) {
   const byId = new Map(tracks.map(track => [track.id, track]));
   const ids = new Set(byId.keys());
   tracks.forEach(track => {
-    const ancestorId = nearestTrackedAncestorId(track.id, ids);
-    if (!ancestorId) return;
-    const ancestor = byId.get(ancestorId);
-    if (!ancestor || !ancestor.transforms || !track.transforms) return;
+    // Walk up the ID path to find the nearest ancestor track.
+    let current = String(track.id);
+    let ancestor = null;
+    while (current.includes('/')) {
+      current = current.slice(0, current.lastIndexOf('/'));
+      if (!ids.has(current)) continue;
+      const candidate = byId.get(current);
+      if (candidate && candidate.transforms) {
+        ancestor = candidate;
+        break;
+      }
+    }
+    if (!ancestor) return;
+
+    // SVG element transforms (from parseTransform on DOM nodes) are already LOCAL to their
+    // parent element — they do NOT need to be further relativized.
+    // Synthetic transforms (computed from manifest bounds for off-screen elements) are also
+    // computed relative to the DOM parent via getDomParentLayer.
+    // Therefore: if the ancestor has a real DOM node (hasDomNode=true), its transform is
+    // already local SVG space and we must NOT normalize the child against it — doing so
+    // would subtract the ancestor's local offset from the child's already-local offset,
+    // producing a double-relative (and therefore wrong) result.
+    //
+    // Normalization IS needed only when the ancestor has transforms in ABSOLUTE screen space —
+    // which historically happened for elements matched to clip-path groups that were positioned
+    // globally. With the current synthetic-transform calculation (always using parent-relative
+    // bounds), this case no longer occurs.
+    //
+    // Skip normalization when the ancestor has a real DOM element.
+    if (ancestor.hasDomNode) return;
+
     track.transforms = track.transforms.map((matrix, index) => {
       const parentMatrix = ancestor.transforms[index];
       if (!matrix || !parentMatrix) return matrix;
@@ -1283,6 +1421,7 @@ function normalizeNestedTrackTransforms(tracks) {
     });
   });
 }
+
 
 function runtime(data){
   const json=JSON.stringify(data).replace(/</g,'\\u003c');
@@ -1504,5 +1643,5 @@ function compile(manifest,options){
   return{svg,html,ir,report:{report:Object.assign({manifestSchema:manifest.schema,prototypeReady:true,snapshotsReady:true,infinite:schedule.infinite,customDuration:schedule.totalDuration},report),schedule},schedule,semanticReport:report,normalizedManifest:normalized}
 }
 
-root.SvgMotionCompiler={validate,buildBaseSchedule:S.buildBaseSchedule,compile};
+root.SvgMotionCompiler={validate,buildBaseSchedule:S.buildBaseSchedule,compile,matchGeometryGloballyV2,getAbsoluteBounds};
 })(window);
