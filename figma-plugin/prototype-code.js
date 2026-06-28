@@ -22,7 +22,24 @@ async function exportManifest(options) {
   figma.ui.postMessage({ type: "progress", message: "Bước 1/4 · Đang đọc selection trên current page…" });
 
   const selected = figma.currentPage.selection.filter(isState);
-  const candidates = selected.length ? selected : figma.currentPage.children.filter(isState);
+  const expandedSelected = [];
+  for (const node of selected) {
+    if (node.type === "COMPONENT_SET") {
+      expandedSelected.push(...node.children.filter(isState));
+    } else if (node.type === "INSTANCE") {
+      const mainComp = await node.getMainComponentAsync();
+      if (mainComp && mainComp.parent && mainComp.parent.type === "COMPONENT_SET") {
+        expandedSelected.push(...mainComp.parent.children.filter(isState));
+      } else {
+        expandedSelected.push(node);
+      }
+    } else if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") {
+      expandedSelected.push(...node.parent.children.filter(isState));
+    } else {
+      expandedSelected.push(node);
+    }
+  }
+  const candidates = expandedSelected.length ? expandedSelected : figma.currentPage.children.filter(isState);
   if (!candidates.length) throw new Error("Hãy chọn ít nhất một Frame, Component hoặc Instance state.");
 
   figma.ui.postMessage({ type: "progress", message: "Bước 2/4 · Đang xác định thứ tự state…" });
@@ -66,6 +83,7 @@ async function exportManifest(options) {
 
   const stateMap = new Map();
   roots.forEach(root => mapState(root, root.id, stateMap));
+  await mapInstances(roots, stateMap);
   const rootIds = new Set(roots.map(root => root.id));
   const prototype = collectPrototype(roots, stateMap, rootIds);
   prototype.startStateId = states[0].id;
@@ -581,3 +599,26 @@ function matrix(value) { return Array.isArray(value) ? value.map(row => row.map(
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.round(parsed * 1e5) / 1e5 : 0; }
 function normalizeName(value) { return String(value || "layer").trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]+/g, "").replace(/-+/g, "-") || "layer"; }
 function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
+
+async function mapInstances(roots, stateMap) {
+  const instances = figma.currentPage.findAll(n => n.type === 'INSTANCE');
+  for (const inst of instances) {
+    let comp = await inst.getMainComponentAsync();
+    if (!comp) continue;
+    if (stateMap.has(comp.id)) {
+      const targetStateId = stateMap.get(comp.id);
+      stateMap.set(inst.id, targetStateId);
+      mapInstanceChildren(inst, comp, targetStateId, stateMap);
+    }
+  }
+}
+function mapInstanceChildren(instNode, compNode, stateId, stateMap) {
+  if (!instNode.children || !compNode.children) return;
+  const minLen = Math.min(instNode.children.length, compNode.children.length);
+  for (let i = 0; i < minLen; i++) {
+    const instChild = instNode.children[i];
+    const compChild = compNode.children[i];
+    stateMap.set(instChild.id, stateId);
+    mapInstanceChildren(instChild, compChild, stateId, stateMap);
+  }
+}

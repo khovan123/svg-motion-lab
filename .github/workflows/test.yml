@@ -1,12 +1,5 @@
-name: compiler-tests
-
-on:
-  push:
-    branches:
-      - main
-      - fix/figma-svg-fidelity-20260623
-  pull_request:
-
+name: Test
+on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,5 +8,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm install
       - run: npm test
-      - run: npm run build:example

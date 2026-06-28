@@ -2,13 +2,13 @@ window.__compilerReady = (async function () {
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = src;
+      script.src = src + '?v=' + Date.now();
       script.onload = resolve;
-      script.onerror = () => reject(new Error(`Không tải được ${src}`));
+      script.onerror = () => reject(new Error('Không tải được ' + src));
       document.head.appendChild(script);
     });
   }
-  for (let index = 1; index <= 7; index += 1) {
-    await loadScript(`semantic-${index}.js`);
+  for (let index = 1; index <= 10; index += 1) {
+    await loadScript('semantic-' + index + '.js');
   }
 })();

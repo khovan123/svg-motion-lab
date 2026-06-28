@@ -2,7 +2,7 @@
   "name": "SVG Motion Manifest Exporter",
   "id": "1651237599678326887",
   "api": "1.0.0",
-  "main": "prototype-code.js",
+  "main": "smart-exporter-code.js",
   "ui": "ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",

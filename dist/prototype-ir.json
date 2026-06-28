@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 5,
   "startStateId": "1:4218",
   "stateOrder": [
     "1:4218",
@@ -11,284 +11,142 @@
     "1:4365",
     "1:4402"
   ],
-  "flowStartingPoints": [
-    {
-      "nodeId": "15:924",
-      "stateId": null,
-      "name": "Flow 6"
-    },
-    {
-      "nodeId": "15:960",
-      "stateId": null,
-      "name": "Flow 4"
-    },
-    {
-      "nodeId": "15:1000",
-      "stateId": null,
-      "name": "Flow 8"
-    }
-  ],
-  "reactions": [
-    {
-      "id": "1:4218:0",
-      "sourceStateId": "1:4218",
-      "sourceNodeId": "1:4218",
-      "sourceNodeName": "Property 1=1st",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
+  "playback": {
+    "infinite": true,
+    "totalDuration": 12.00100010728836,
+    "segments": [
+      {
+        "from": "1:4218",
+        "to": "1:4182",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4218:0",
+        "transitionStart": 0.8,
+        "transitionEnd": 1.600000011920929
       },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
+      {
+        "from": "1:4182",
+        "to": "1:4254",
+        "hold": 0.800000011920929,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4182:8",
+        "transitionStart": 2.4000000238418577,
+        "transitionEnd": 3.2000000357627867
       },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4182",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4182"
-        }
-      ]
-    },
-    {
-      "id": "1:4182:1",
-      "sourceStateId": "1:4182",
-      "sourceNodeId": "1:4182",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
+      {
+        "from": "1:4254",
+        "to": "1:4439",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4254:16",
+        "transitionStart": 4.0000000357627865,
+        "transitionEnd": 4.8000000476837155
       },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.800000011920929
+      {
+        "from": "1:4439",
+        "to": "1:4291",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4439:24",
+        "transitionStart": 5.600000047683715,
+        "transitionEnd": 6.400000059604644
       },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4254",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4254"
-        }
-      ]
-    },
-    {
-      "id": "1:4254:2",
-      "sourceStateId": "1:4254",
-      "sourceNodeId": "1:4254",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
+      {
+        "from": "1:4291",
+        "to": "1:4328",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4291:32",
+        "transitionStart": 7.200000059604644,
+        "transitionEnd": 8.000000071525573
       },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
+      {
+        "from": "1:4328",
+        "to": "1:4365",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4328:40",
+        "transitionStart": 8.800000071525574,
+        "transitionEnd": 9.600000083446503
       },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4439",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4439"
-        }
-      ]
-    },
-    {
-      "id": "1:4439:3",
-      "sourceStateId": "1:4439",
-      "sourceNodeId": "1:4439",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
+      {
+        "from": "1:4365",
+        "to": "1:4402",
+        "hold": 0.8,
+        "duration": 0.800000011920929,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4365:48",
+        "transitionStart": 10.400000083446503,
+        "transitionEnd": 11.200000095367432
       },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
-      },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4291",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4291"
-        }
-      ]
-    },
-    {
-      "id": "1:4291:4",
-      "sourceStateId": "1:4291",
-      "sourceNodeId": "1:4291",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
-      },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
-      },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4328",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4328"
-        }
-      ]
-    },
-    {
-      "id": "1:4328:5",
-      "sourceStateId": "1:4328",
-      "sourceNodeId": "1:4328",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
-      },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
-      },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4365",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4365"
-        }
-      ]
-    },
-    {
-      "id": "1:4365:6",
-      "sourceStateId": "1:4365",
-      "sourceNodeId": "1:4365",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
-      },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.8
-      },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4402",
-          "navigation": "CHANGE_TO",
-          "transition": {
-            "type": "SMART_ANIMATE",
-            "easing": {
-              "type": "EASE_IN_AND_OUT"
-            },
-            "duration": 0.800000011920929
-          },
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4402"
-        }
-      ]
-    },
-    {
-      "id": "1:4402:7",
-      "sourceStateId": "1:4402",
-      "sourceNodeId": "1:4402",
-      "sourceNodeName": "Property 1=Default",
-      "sourceLayerKey": "@root",
-      "sourceBounds": {
-        "x": 0,
-        "y": 0,
-        "width": 354.66666,
-        "height": 240
-      },
-      "trigger": {
-        "type": "AFTER_TIMEOUT",
-        "timeout": 0.800000011920929
-      },
-      "actions": [
-        {
-          "type": "NODE",
-          "destinationId": "1:4218",
-          "navigation": "CHANGE_TO",
-          "transition": null,
-          "resetVideoPosition": false,
-          "destinationStateId": "1:4218"
-        }
-      ]
-    }
-  ],
-  "variables": [],
-  "variableCollections": [],
-  "unsupportedActions": []
+      {
+        "from": "1:4402",
+        "to": "1:4218",
+        "hold": 0.800000011920929,
+        "duration": 0.001,
+        "easing": {
+          "type": "EASE_IN_AND_OUT"
+        },
+        "reactionId": "1:4402:56",
+        "transitionStart": 12.000000107288361,
+        "transitionEnd": 12.00100010728836
+      }
+    ]
+  },
+  "smartAnimate": {
+    "renderMode": "multi-track-smart-animate",
+    "totalTracks": 31,
+    "pathMorphTracks": 25,
+    "transformTracks": 30,
+    "rotationTracks": 30,
+    "colorTracks": 27,
+    "presenceTracks": 2,
+    "fullStateSnapshots": 0,
+    "embeddedMotionIds": true,
+    "genericAnimationTypes": [
+      "numeric-geometry",
+      "translate",
+      "scale",
+      "matrix-transform",
+      "rotation",
+      "opacity",
+      "visibility",
+      "solid-color",
+      "path-morph",
+      "appear-disappear"
+    ],
+    "connectorStatic": true,
+    "refreshRotationTrack": true,
+    "pieFallbackSwap": true,
+    "exactRingSubtrees": true,
+    "ringStateCount": 9,
+    "ringDefinitionReferencesNormalized": true,
+    "status": "ok",
+    "semanticTracks": 31,
+    "pathMorphs": 25,
+    "subtreeFallbacks": 0,
+    "runtimeSyntaxRepaired": true,
+    "staticRotationTracksSkipped": true
+  },
+  "status": "ok"
 }
