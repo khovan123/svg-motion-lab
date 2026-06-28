@@ -9,7 +9,7 @@
     "build:example": "node compile.js --manifest fixtures/motion-manifest.example.json",
     "test": "node test/compiler.test.js"
   },
-   "dependencies": {
+  "dependencies": {
     "jsdom": "^24.1.0"
-   }
+  }
 }
