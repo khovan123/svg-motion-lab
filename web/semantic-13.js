@@ -53,12 +53,80 @@ function repair(result,manifest){
   const error=doc.querySelector('parsererror');
   if(error)throw new Error('Không thể sửa hiệu ứng SVG: '+error.textContent.slice(0,180));
   const svg=doc.documentElement;
-  const connector=svg.querySelector('[data-motion-id$="@root/vector-1[0]"]');
-  if(connector){connector.removeAttribute('data-track-index');connector.setAttribute('data-static-connector','true');}
+  // Find the real dashed connector line by its stroke attribute (stroke-only path with dasharray)
+  // The geometry matcher ignores stroke-only paths so vector-1[0] may be matched to a wrong element.
+  const realConnector = svg.querySelector('[stroke-dasharray][stroke]');
+  if (realConnector) {
+    realConnector.removeAttribute('data-track-index');
+    realConnector.setAttribute('data-static-connector', 'true');
+    realConnector.setAttribute('data-motion-id', '1:4181:@root/vector-1[0]');
+    // Move the real connector to be a direct child of #motion-scene if needed
+    const scene = svg.querySelector('#motion-scene');
+    if (scene && realConnector.parentNode && realConnector.parentNode !== scene) {
+      const wrapper = realConnector.parentNode;
+      scene.insertBefore(realConnector, wrapper);
+    }
+  }
+  // Also clear any wrong assignment of static-connector from the element that was incorrectly matched to vector-1[0]
+  const wrongConnector = svg.querySelector('[data-motion-id$="@root/vector-1[0]"]:not([stroke-dasharray])');
+  if (wrongConnector) {
+    wrongConnector.removeAttribute('data-static-connector');
+    wrongConnector.removeAttribute('data-track-index');
+  }
 
-  const refreshPath=svg.querySelector('path[data-motion-id*="hugeiconsrefresh-03-stroke-rounded-1"]');
+  // Fix spinner hierarchy: group the background circle and refresh arrows under a new Container frame group
+  // and assign data-motion-id="container[0]" to this group. This keeps them together so they sort and transition together.
+  const scene = svg.querySelector('#motion-scene');
+  let innerContainerPath = null;
+  let refreshPath = null;
+  
+  // Robust loop matching to bypass CSS escaping issues with brackets
+  const allEls = svg.querySelectorAll('*');
+  allEls.forEach(el => {
+    const mid = el.getAttribute('data-motion-id') || '';
+    if (mid.endsWith('/container[0]') || mid === 'container[0]') {
+      innerContainerPath = el;
+    }
+    if (mid.includes('hugeiconsrefresh-03-stroke-rounded-1')) {
+      refreshPath = el;
+    }
+  });
+
+  if (scene && refreshPath && innerContainerPath) {
+    // Find the top-level children of scene containing these elements
+    let rotorGroup = refreshPath;
+    while (rotorGroup && rotorGroup.parentNode !== scene) {
+      rotorGroup = rotorGroup.parentNode;
+    }
+    let containerGroup = innerContainerPath;
+    while (containerGroup && containerGroup.parentNode !== scene) {
+      containerGroup = containerGroup.parentNode;
+    }
+    
+    if (rotorGroup && containerGroup) {
+      const g = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('data-motion-id', '1:4181:@root/container[0]');
+      
+      // Move them into the new group
+      // We want the background circle to be behind the refresh arrows,
+      // so append innerContainerPath first, then rotorGroup
+      if (innerContainerPath.parentNode === containerGroup && containerGroup !== innerContainerPath) {
+        g.appendChild(innerContainerPath);
+        containerGroup.remove();
+      } else {
+        g.appendChild(containerGroup);
+      }
+      
+      g.appendChild(rotorGroup);
+      scene.appendChild(g);
+      
+      // Remove from the inner path to avoid duplicate ID matching
+      innerContainerPath.removeAttribute('data-motion-id');
+    }
+  }
+
   if(refreshPath){
-    const filterGroup=refreshPath.closest('g[filter]');
+    const filterGroup=refreshPath.closest('g');
     const rotor=filterGroup&&filterGroup.parentElement;
     const fallback=filterGroup&&filterGroup.querySelector('[data-fallback-index]');
     if(fallback)fallback.remove();
@@ -69,6 +137,22 @@ function repair(result,manifest){
 
   svg.querySelectorAll('[data-fallback-index]').forEach(group=>{if(isPieFallback(group))group.setAttribute('data-fallback-mode','swap')});
   svg.querySelectorAll('script').forEach(script=>{script.textContent=patchFallbackScript(script.textContent)});
+
+  // Final filter stripping pass to ensure no filters remain inside masks or clip-paths
+  svg.querySelectorAll('mask *, clipPath *').forEach(el => {
+    if (el.hasAttribute('filter')) el.removeAttribute('filter');
+  });
+  svg.querySelectorAll('[filter]').forEach(el => {
+    let parent = el.parentNode;
+    while (parent && parent !== svg) {
+      const tag = parent.tagName ? parent.tagName.toLowerCase() : '';
+      if (parent.hasAttribute('mask') || parent.hasAttribute('clip-path') || tag === 'mask' || tag === 'clippath') {
+        el.removeAttribute('filter');
+        break;
+      }
+      parent = parent.parentNode;
+    }
+  });
 
   const motion=refreshMotion(manifest,result.schedule);
   const script=document.createElementNS('http://www.w3.org/2000/svg','script');

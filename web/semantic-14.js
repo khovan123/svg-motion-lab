@@ -104,7 +104,12 @@ function repair(result,manifest){
   const exactRoot=documentNode.createElementNS(SVG_NS,'g');
   exactRoot.setAttribute('data-exact-ring','true');
   const defs = svg.querySelector('defs') || svg.insertBefore(documentNode.createElementNS(SVG_NS, 'defs'), svg.firstChild);
-  result.schedule.stateIds.forEach((stateId,index)=>{
+  const uniqueStateIds = [];
+  result.schedule.stateIds.forEach(id => {
+    if (!uniqueStateIds.includes(id)) uniqueStateIds.push(id);
+  });
+
+  uniqueStateIds.forEach((stateId,index)=>{
     const state=stateById.get(stateId);
     if(!state)return;
     const source=parseStateSvg(state);
@@ -149,7 +154,12 @@ function repair(result,manifest){
   script.textContent=runtime({
     duration:result.schedule.totalDuration,
     infinite:result.schedule.infinite,
-    segments:result.schedule.segments.map(segment=>({from:result.schedule.stateIds.indexOf(segment.from),to:result.schedule.stateIds.indexOf(segment.to),start:segment.transitionStart,end:segment.transitionEnd}))
+    segments:result.schedule.segments.map(segment=>({
+      from:uniqueStateIds.indexOf(segment.from),
+      to:uniqueStateIds.indexOf(segment.to),
+      start:segment.transitionStart,
+      end:segment.transitionEnd
+    }))
   });
   svg.appendChild(script);
   result.svg='<?xml version="1.0" encoding="UTF-8"?>'+new XMLSerializer().serializeToString(svg);

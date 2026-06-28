@@ -3,15 +3,24 @@ const NS='svg-motion-lab',KEY='motion-id';
 figma.ui.onmessage=async m=>{if(!m||m.type!=='export')return;try{figma.ui.postMessage({type:'manifest',manifest:await build(m.options||{})})}catch(e){figma.ui.postMessage({type:'error',message:e&&e.message?e.message:String(e)})}};
 figma.ui.postMessage({type:'ready'});
 async function build(options){
- const initialSelected=figma.currentPage.selection.filter(isState);
- const expandedSelected=[];
- for(const node of initialSelected){
-  if(node.type==='COMPONENT_SET'){
-   expandedSelected.push(...node.children.filter(isState));
-  }else{
-   expandedSelected.push(node);
+  const initialSelected=figma.currentPage.selection.filter(isState);
+  const expandedSelected=[];
+  for(const node of initialSelected){
+   if(node.type==='COMPONENT_SET'){
+    expandedSelected.push(...node.children.filter(isState));
+   }else if(node.type==='INSTANCE'){
+    const mainComp = await node.getMainComponentAsync();
+    if(mainComp && mainComp.parent && mainComp.parent.type === 'COMPONENT_SET'){
+     expandedSelected.push(...mainComp.parent.children.filter(isState));
+    } else {
+     expandedSelected.push(node);
+    }
+   }else if(node.type==='COMPONENT' && node.parent && node.parent.type === 'COMPONENT_SET'){
+    expandedSelected.push(...node.parent.children.filter(isState));
+   }else{
+    expandedSelected.push(node);
+   }
   }
- }
  const roots=order(expandedSelected.length?expandedSelected:figma.currentPage.children.flatMap(n=>n.type==='COMPONENT_SET'?n.children.filter(isState):[n]).filter(isState));
  if(!roots.length)throw new Error('Hãy chọn ít nhất một state.');
  const states=[];
@@ -22,7 +31,7 @@ async function build(options){
   const raw=await svg(root),annotated=annotateSvg(raw,svgNodeMap,root.id);
   states.push({id:root.id,stableStateId:(variant.componentSetId||root.id)+':'+variant.variantKey,name:root.name,order:i,width:n(root.width),height:n(root.height),variant,layers,svgNodeMap,svg:annotated});
  }
- const stateMap=new Map();roots.forEach(r=>mapState(r,r.id,stateMap));const rootIds=new Set(roots.map(r=>r.id));const prototype=proto(roots,stateMap,rootIds);prototype.startStateId=states[0].id;
+  const stateMap=new Map();roots.forEach(r=>mapState(r,r.id,stateMap));await mapInstances(roots,stateMap);const rootIds=new Set(roots.map(r=>r.id));const prototype=proto(roots,stateMap,rootIds);prototype.startStateId=states[0].id;
  return{schema:'svg-motion-lab/figma-manifest@4',fidelityMetadataVersion:4,exportedAt:new Date().toISOString(),source:{fileName:figma.root.name,pageId:figma.currentPage.id,pageName:figma.currentPage.name},capabilities:{stableNodeIdsAcrossVariants:true,embeddedMotionIds:true,stableDefinitionIds:true,svgNodeMap:true,svgAstMerge:true,subtreeFallback:true,maskGeometry:true,clipHierarchy:true,filterHierarchy:true,vectorTopologyCorrespondence:true,gradientTransform:true,transformInterpolation:true,opacityInterpolation:true,colorInterpolation:true,pathMorph:true,rotationInterpolation:true,scaleInterpolation:true,translationInterpolation:true,visibilityInterpolation:true},startNodeId:states[0].id,stateOrder:states.map(s=>s.id),states,prototype,transitions:legacy(prototype.reactions),calibration:{renderMode:'multi-track-smart-animate',layerMatchOrder:['embeddedMotionId','stableNodeId','pluginKey','semanticPath','structuralSlot']}};
 }
 function annotateSvg(source,map,stateId){
@@ -64,9 +73,31 @@ function effectData(node){if(!('effects'in node)||!Array.isArray(node.effects))r
 function corner(node){if(!('cornerRadius'in node))return null;if(typeof node.cornerRadius==='number')return{all:n(node.cornerRadius)};return{topLeft:n(node.topLeftRadius||0),topRight:n(node.topRightRadius||0),bottomRight:n(node.bottomRightRadius||0),bottomLeft:n(node.bottomLeftRadius||0)}}
 function text(node){if(node.type!=='TEXT')return null;return{characters:node.characters,fontSize:typeof node.fontSize==='number'?n(node.fontSize):null,fontName:node.fontName&&node.fontName!==figma.mixed?clone(node.fontName):null,fontWeight:typeof node.fontWeight==='number'?node.fontWeight:null,textAlignHorizontal:node.textAlignHorizontal,textAlignVertical:node.textAlignVertical,lineHeight:node.lineHeight&&node.lineHeight!==figma.mixed?clone(node.lineHeight):null,letterSpacing:node.letterSpacing&&node.letterSpacing!==figma.mixed?clone(node.letterSpacing):null,textCase:node.textCase&&node.textCase!==figma.mixed?node.textCase:null,textDecoration:node.textDecoration&&node.textDecoration!==figma.mixed?node.textDecoration:null}}
 async function svg(node){const bytes=await node.exportAsync({format:'SVG'}),s=utf8(bytes);if(!s.includes('<svg'))throw new Error('SVG không hợp lệ: '+node.name);return s}
-function proto(roots,stateMap,rootIds){const out=[];roots.forEach(root=>visit(root,node=>reactions(node).forEach(r=>out.push({id:node.id+':'+out.length,sourceStateId:root.id,sourceNodeId:node.id,sourceNodeName:node.name||node.type,sourceLayerKey:node.id===root.id?'@root':plugin(node)||slug(node.name||node.type),trigger:clone(r.trigger||{type:'ON_CLICK'}),actions:actions(r).map(a=>annotate(a,stateMap,rootIds))}))));return{version:3,startStateId:null,flowStartingPoints:[],reactions:out,variables:[],variableCollections:[]}}
+function proto(roots,stateMap,rootIds){const out=[];roots.forEach(root=>visit(root,node=>reactions(node).forEach(r=>out.push({id:node.id+':'+out.length,sourceStateId:root.id,sourceNodeId:node.id,sourceNodeName:node.name||node.type,sourceLayerKey:node.id===root.id?'@root':plugin(node)||slug(node.name||node.type),trigger:clone(r.trigger||{type:'ON_CLICK'}),actions:actions(r).map(a=>annotate(a,stateMap,rootIds))}))));const points=Array.isArray(figma.currentPage.flowStartingPoints)?figma.currentPage.flowStartingPoints.map(point=>({nodeId:point.nodeId,stateId:rootIds.has(point.nodeId)?point.nodeId:stateMap.get(point.nodeId)||null,name:point.name||""})).filter(pt=>pt.stateId!==null):[];return{version:3,startStateId:null,flowStartingPoints:points,reactions:out,variables:[],variableCollections:[]}}
 function annotate(a,stateMap,rootIds){if(!a||typeof a!=='object')return a;const o={};Object.entries(a).forEach(([k,v])=>o[k]=Array.isArray(v)?v.map(x=>annotate(x,stateMap,rootIds)):v&&typeof v==='object'?annotate(v,stateMap,rootIds):v);if(a.destinationId)o.destinationStateId=rootIds.has(a.destinationId)?a.destinationId:stateMap.get(a.destinationId)||null;return o}
 function legacy(rs){return rs.map(r=>{const a=findAction(r.actions);return a&&a.destinationStateId?{from:r.sourceStateId,to:a.destinationStateId,trigger:r.trigger,navigation:a.navigation||null,transition:a.transition||null}:null}).filter(Boolean)}
 function findAction(as){for(const a of as||[]){if(a&&a.type==='NODE'&&a.destinationStateId)return a}return null}
 function order(ns){return[...ns].sort((a,b)=>{const ay=a.absoluteBoundingBox?a.absoluteBoundingBox.y:a.y||0,by=b.absoluteBoundingBox?b.absoluteBoundingBox.y:b.y||0;if(Math.abs(ay-by)>8)return ay-by;const ax=a.absoluteBoundingBox?a.absoluteBoundingBox.x:a.x||0,bx=b.absoluteBoundingBox?b.absoluteBoundingBox.x:b.x||0;return ax-bx})}
-function isState(n){return n&&['FRAME','COMPONENT','INSTANCE','COMPONENT_SET'].includes(n.type)}function mapState(n,id,m){m.set(n.id,id);if('children'in n)n.children.forEach(c=>mapState(c,id,m))}function visit(n,f){f(n);if('children'in n)n.children.forEach(c=>visit(c,f))}function reactions(n){return'reactions'in n&&Array.isArray(n.reactions)?n.reactions:[]}function actions(r){return Array.isArray(r.actions)?r.actions:r.action?[r.action]:[]}function plugin(n){try{return n.getSharedPluginData(NS,KEY)||n.getPluginData(KEY)||''}catch(e){return''}}function slug(v){return String(v||'layer').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]+/g,'').replace(/-+/g,'-')||'layer'}function n(v){v=Number(v);return Number.isFinite(v)?Math.round(v*1e5)/1e5:0}function pt(v){return{x:n(v.x),y:n(v.y)}}function mat(v){return Array.isArray(v)?v.map(r=>r.map(n)):null}function color(v){return{r:n(v.r),g:n(v.g),b:n(v.b),a:n(v.a==null?1:v.a)}}function clone(v){return v==null?v:JSON.parse(JSON.stringify(v))}function utf8(bytes){let out='',i=0;while(i<bytes.length){const a=bytes[i++];if(a<128){out+=String.fromCharCode(a);continue}if((a&224)===192){const b=bytes[i++];out+=String.fromCharCode(((a&31)<<6)|(b&63));continue}if((a&240)===224){const b=bytes[i++],c=bytes[i++];out+=String.fromCharCode(((a&15)<<12)|((b&63)<<6)|(c&63));continue}if((a&248)===240){const b=bytes[i++],c=bytes[i++],d=bytes[i++];let cp=((a&7)<<18)|((b&63)<<12)|((c&63)<<6)|(d&63);cp-=65536;out+=String.fromCharCode(55296+(cp>>10),56320+(cp&1023));continue}out+='�'}return out}
+function isState(n){return n&&['FRAME','COMPONENT','INSTANCE','COMPONENT_SET'].includes(n.type)}function mapState(n,id,m){m.set(n.id,id);if('children'in n)n.children.forEach(c=>mapState(c,id,m))}function visit(n,f){f(n);if('children'in n)n.children.forEach(c=>visit(c,f))}function reactions(n){return'reactions'in n&&Array.isArray(n.reactions)?n.reactions:[]}function actions(r){return Array.isArray(r.actions)?r.actions:r.action?[r.action]:[]}function plugin(n){try{return n.getSharedPluginData(NS,KEY)||n.getPluginData(KEY)||''}catch(e){return''}}function slug(v){return String(v||'layer').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]+/g,'').replace(/-+/g,'-')||'layer'}function n(v){v=Number(v);return Number.isFinite(v)?Math.round(v*1e5)/1e5:0}function pt(v){return{x:n(v.x),y:n(v.y)}}function mat(v){return Array.isArray(v)?v.map(r=>r.map(n)):null}function color(v){return{r:n(v.r),g:n(v.g),b:n(v.b),a:n(v.a==null?1:v.a)}}function clone(v){return v==null?v:JSON.parse(JSON.stringify(v))}function utf8(bytes){let out='',i=0;while(i<bytes.length){const a=bytes[i++];if(a<128){out+=String.fromCharCode(a);continue}if((a&224)===192){const b=bytes[i++];out+=String.fromCharCode(((a&31)<<6)|(b&63));continue}if((a&240)===224){const b=bytes[i++],c=bytes[i++];out+=String.fromCharCode(((a&15)<<12)|((b&63)<<6)|(c&63));continue}if((a&248)===240){const b=bytes[i++],c=bytes[i++],d=bytes[i++];let cp=((a&7)<<18)|((b&63)<<12)|((c&63)<<6)|(d&63);cp-=65536;out+=String.fromCharCode(55296+(cp>>10),56320+(cp&1023));continue}out+=''}return out}
+async function mapInstances(roots, stateMap) {
+  const instances = figma.currentPage.findAll(n => n.type === 'INSTANCE');
+  for (const inst of instances) {
+    let comp = await inst.getMainComponentAsync();
+    if (!comp) continue;
+    if (stateMap.has(comp.id)) {
+      const targetStateId = stateMap.get(comp.id);
+      stateMap.set(inst.id, targetStateId);
+      mapInstanceChildren(inst, comp, targetStateId, stateMap);
+    }
+  }
+}
+function mapInstanceChildren(instNode, compNode, stateId, stateMap) {
+  if (!instNode.children || !compNode.children) return;
+  const minLen = Math.min(instNode.children.length, compNode.children.length);
+  for (let i = 0; i < minLen; i++) {
+    const instChild = instNode.children[i];
+    const compChild = compNode.children[i];
+    stateMap.set(instChild.id, stateId);
+    mapInstanceChildren(instChild, compChild, stateId, stateMap);
+  }
+}
