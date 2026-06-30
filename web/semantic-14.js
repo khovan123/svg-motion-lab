@@ -41,6 +41,12 @@ function isConnector(element){
   return element&&String(element.tagName).toLowerCase()==='path'&&element.hasAttribute('stroke-dasharray');
 }
 function checkIsPie(element) {
+  // Never classify container or rotor elements as pie chart
+  const motionId = element.getAttribute('data-motion-id') || '';
+  if (motionId.includes('container') || motionId.includes('hugeiconsrefresh')) return false;
+  const hasRotorDescendant = element.querySelector && element.querySelector('[data-motion-id*="container"],[data-motion-id*="hugeiconsrefresh"]');
+  if (hasRotorDescendant) return false;
+
   const tag = String(element.tagName).toLowerCase();
   if (tag === 'mask' || tag === 'g' || tag === 'path') {
     const paths = tag === 'path' ? [element] : Array.from(element.querySelectorAll('path'));
@@ -57,7 +63,6 @@ function checkIsPie(element) {
       }
     }
   }
-  const motionId = element.getAttribute('data-motion-id') || '';
   return motionId.includes('piechart');
 }
 function ringElements(source){

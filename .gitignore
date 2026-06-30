@@ -1,2 +1,15 @@
 .contextos/
 node_modules/
+
+# ContextOS install artefacts
+.codex/marketplaces/contextos/
+.claude/settings.json
+.gemini/
+
+
+# START Ruler Generated Files
+/.codex/config.toml
+/.codex/config.toml.bak
+/AGENTS.md
+/AGENTS.md.bak
+# END Ruler Generated Files

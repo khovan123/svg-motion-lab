@@ -582,6 +582,37 @@ function matchGeometryGloballyV2(state) {
   const doc = new DOMParser().parseFromString(state.svg, 'image/svg+xml');
   const rootSvg = doc.documentElement;
 
+  // Record elements that already have data-motion-id before we clear them
+  // Only keep original IDs whose bounds closely match the layer's manifest bounds (prevents bad Figma exports)
+  const originalIds = new Map();
+  const elementsWithOriginalIds = new Set();
+  const layerBoundsMap = new Map();
+  (state.layers || []).forEach(l => {
+    if (l.stableNodeId && l.bounds) layerBoundsMap.set(l.stableNodeId, l.bounds);
+  });
+  rootSvg.querySelectorAll('[data-motion-id]').forEach(el => {
+    const mid = el.getAttribute('data-motion-id');
+    const layerBounds = layerBoundsMap.get(mid);
+    elementsWithOriginalIds.add(el);
+    if (layerBounds) {
+      // Validate bounds match (15px tolerance)
+      const elBounds = getAbsoluteBounds(el);
+      if (elBounds) {
+        const dx = Math.abs(elBounds.x - layerBounds.x);
+        const dy = Math.abs(elBounds.y - layerBounds.y);
+        const dw = Math.abs(elBounds.width - layerBounds.width);
+        const dh = Math.abs(elBounds.height - layerBounds.height);
+        if (dx <= 15 && dy <= 15 && dw <= 15 && dh <= 15) {
+          originalIds.set(mid, el);
+        }
+        // If bounds don't match, skip (bad data-motion-id in Figma export)
+        return;
+      }
+    }
+    // If no layer bounds available (e.g., elements in defs), store as-is
+    originalIds.set(mid, el);
+  });
+
   // Convert all rect elements to paths to avoid tag mismatch in buildTrack
   rootSvg.querySelectorAll('rect').forEach(rect => {
     let parent = rect.parentNode;
@@ -608,32 +639,7 @@ function matchGeometryGloballyV2(state) {
 
   mergeDuplicateFillAndStrokePaths(rootSvg);
 
-  // Group container background paths at x=145, y=149 into a single <g>
-  const containerEls = [];
-  rootSvg.querySelectorAll('path').forEach(el => {
-    let parent = el.parentNode;
-    let isInsideDefs = false;
-    while (parent) {
-      if (parent.tagName && parent.tagName.toLowerCase() === 'defs') {
-        isInsideDefs = true;
-        break;
-      }
-      parent = parent.parentNode;
-    }
-    if (isInsideDefs) return;
-
-    const b = getAbsoluteBounds(el);
-    if (b && Math.abs(b.x - 145) < 5 && Math.abs(b.y - 149) < 5 && Math.abs(b.width - 64) < 5 && Math.abs(b.height - 64) < 5) {
-      containerEls.push(el);
-    }
-  });
-
-  if (containerEls.length > 0) {
-    const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
-    const first = containerEls[0];
-    first.parentNode.insertBefore(g, first);
-    containerEls.forEach(el => g.appendChild(el));
-  }
+  // Container grouping removed; containers are matched using originalIds fallback
 
   rootSvg.querySelectorAll('[data-motion-id]').forEach(el => el.removeAttribute('data-motion-id'));
 
@@ -676,7 +682,8 @@ function matchGeometryGloballyV2(state) {
   matchedElementsSet.add(scene);
   if (scene.tagName.toLowerCase() === 'svg') {
     Array.from(scene.children).forEach(child => {
-      if (child.tagName.toLowerCase() === 'g') {
+      // Only pre-block top-level g children that did NOT originally have a data-motion-id
+      if (child.tagName.toLowerCase() === 'g' && !elementsWithOriginalIds.has(child)) {
         matchedElementsSet.add(child);
       }
     });
@@ -764,6 +771,17 @@ function matchGeometryGloballyV2(state) {
     }
   });
 
+  // Pass 3: Fallback for unmatched leaf layers using saved originalIds
+  leafLayers.forEach(layer => {
+    if (matchedNodes.has(layer.stableNodeId)) return;
+    const originalEl = originalIds.get(layer.stableNodeId);
+    if (originalEl && !matchedElementsSet.has(originalEl)) {
+      matchedNodes.set(layer.stableNodeId, originalEl);
+      matchedElementsSet.add(originalEl);
+      originalEl.setAttribute('data-motion-id', layer.stableNodeId);
+    }
+  });
+
   const sortedContainers = [...containerLayers].sort((a, b) => {
     return extractPath(b.stableNodeId).split('/').length - extractPath(a.stableNodeId).split('/').length;
   });
@@ -842,35 +860,43 @@ function matchGeometryGloballyV2(state) {
         }
       });
     } else {
-      let bestMatch = null;
-      let minDiff = Infinity;
-      svgElements.forEach(el => {
-        if (matchedElementsSet.has(el)) return;
-        const tag = el.tagName.toLowerCase();
-        if (tag !== 'g' && tag !== 'path' && tag !== 'rect') return;
+      // First try the originalIds fallback (elements that already had data-motion-id)
+      const originalEl = originalIds.get(layer.stableNodeId);
+      if (originalEl && !matchedElementsSet.has(originalEl)) {
+        matchedNodes.set(layer.stableNodeId, originalEl);
+        matchedElementsSet.add(originalEl);
+        originalEl.setAttribute('data-motion-id', layer.stableNodeId);
+      } else {
+        let bestMatch = null;
+        let minDiff = Infinity;
+        svgElements.forEach(el => {
+          if (matchedElementsSet.has(el)) return;
+          const tag = el.tagName.toLowerCase();
+          if (tag !== 'g' && tag !== 'path' && tag !== 'rect') return;
 
-        const bSVG = getAbsoluteBounds(el);
-        if (!bSVG) return;
+          const bSVG = getAbsoluteBounds(el);
+          if (!bSVG) return;
 
-        const bLayer = layer.bounds;
-        const dx = Math.abs(bSVG.x - bLayer.x);
-        const dy = Math.abs(bSVG.y - bLayer.y);
-        const dw = Math.abs(bSVG.width - bLayer.width);
-        const dh = Math.abs(bSVG.height - bLayer.height);
+          const bLayer = layer.bounds;
+          const dx = Math.abs(bSVG.x - bLayer.x);
+          const dy = Math.abs(bSVG.y - bLayer.y);
+          const dw = Math.abs(bSVG.width - bLayer.width);
+          const dh = Math.abs(bSVG.height - bLayer.height);
 
-        const diff = dx + dy + dw + dh;
-        if (dx < 4.5 && dy < 4.5 && dw < 4.5 && dh < 4.5) {
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestMatch = el;
+          const diff = dx + dy + dw + dh;
+          if (dx < 4.5 && dy < 4.5 && dw < 4.5 && dh < 4.5) {
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestMatch = el;
+            }
           }
-        }
-      });
+        });
 
-      if (bestMatch) {
-        matchedNodes.set(layer.stableNodeId, bestMatch);
-        matchedElementsSet.add(bestMatch);
-        bestMatch.setAttribute('data-motion-id', layer.stableNodeId);
+        if (bestMatch) {
+          matchedNodes.set(layer.stableNodeId, bestMatch);
+          matchedElementsSet.add(bestMatch);
+          bestMatch.setAttribute('data-motion-id', layer.stableNodeId);
+        }
       }
     }
   });
@@ -986,12 +1012,20 @@ function buildStateMapping(state) {
     }
 
     // Semantic naming for mask-group based on its children
-    if (baseName.toLowerCase().startsWith('mask-group')) {
+    // Canonical color order: yellow=0, cyan=1, blue=2, orange=3
+    if (baseName.toLowerCase() === 'mask-group') {
       const children = childNamesMap.get(path) || new Set();
-      if (children.has('yellow')) baseName = 'mask-group-yellow';
-      else if (children.has('cyan')) baseName = 'mask-group-cyan';
-      else if (children.has('blue')) baseName = 'mask-group-blue';
-      else if (children.has('orange')) baseName = 'mask-group-orange';
+      const colorOrder = ['yellow', 'cyan', 'blue', 'orange'];
+      const matchedColor = colorOrder.find(c => children.has(c));
+      if (matchedColor) {
+        const colorIndex = colorOrder.indexOf(matchedColor);
+        const key2 = canonicalParent + '|mask-group-color-' + colorIndex;
+        const existingCount = counters.get(key2) || 0;
+        counters.set(key2, existingCount + 1);
+        const canonicalSegment2 = 'mask-group[' + colorIndex + ']';
+        mapping.set(path, canonicalParent + '/' + canonicalSegment2);
+        return;
+      }
     }
 
     const key = canonicalParent + '|' + baseName;
@@ -1123,6 +1157,9 @@ function canonicalizeManifest(manifest){
     if (typeof svg === 'string') {
       const doc2 = new DOMParser().parseFromString(svg, 'image/svg+xml');
       doc2.querySelectorAll('[data-motion-id]').forEach(el => {
+        // Skip elements inside <defs> that are not inside a <mask> — preserves ring-repair defs
+        // but still remaps mask path IDs for consistent runtime tracking
+        if (el.closest('defs') && !el.closest('mask')) return;
         const origId = el.getAttribute('data-motion-id');
         const canonicalId = mapId(origId, mapping);
         el.setAttribute('data-motion-id', canonicalId);
@@ -1135,7 +1172,7 @@ function canonicalizeManifest(manifest){
   return Object.assign({},manifest,{states});
 }
 
-function parseState(state){const doc=new DOMParser().parseFromString(state.svg,'image/svg+xml'),error=doc.querySelector('parsererror');if(error)throw new Error('SVG không hợp lệ ở '+(state.name||state.id)+': '+error.textContent.slice(0,160));const svg=doc.documentElement;const map=new Map();svg.querySelectorAll('[data-motion-id]').forEach(el=>{const id=el.getAttribute('data-motion-id');if(!map.has(id))map.set(id,el)});return{state,doc,svg,map}}
+function parseState(state){const doc=new DOMParser().parseFromString(state.svg,'image/svg+xml'),error=doc.querySelector('parsererror');if(error)throw new Error('SVG không hợp lệ ở '+(state.name||state.id)+': '+error.textContent.slice(0,160));const svg=doc.documentElement;const map=new Map();svg.querySelectorAll('[data-motion-id]').forEach(el=>{if (el.closest('defs')) return;const id=el.getAttribute('data-motion-id');if(!map.has(id))map.set(id,el)});return{state,doc,svg,map}}
 function layerMap(state){const out=new Map();(state.layers||[]).forEach(layer=>out.set(layer.stableNodeId,layer));return out}
 function numAttrs(el){const out={};NUMERIC.forEach(name=>{if(el&&el.hasAttribute(name)){const value=Number(el.getAttribute(name));if(Number.isFinite(value))out[name]=value}});return out}
 function parseColor(value){const v=String(value||'').trim();let m;if(/^#[0-9a-f]{6}$/i.test(v))return[v.slice(1,3),v.slice(3,5),v.slice(5,7)].map(x=>parseInt(x,16));if((m=v.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i)))return m.slice(1).map(Number);return null}
@@ -1186,7 +1223,14 @@ function buildTrack(id,nodes,layers,states){
     if (layer === null) return false;
     if (!isLayerGloballyVisible(layer, states[idx].state)) return false;
     if (nodes[idx] !== null) return true;
-    if (layer.bounds != null) return true;
+    if (layer.bounds != null) {
+      // Zero-size 'active' layers with no matched node are absent (collapsed bar chart cells)
+      if (layer.name && layer.name.toLowerCase().includes('active') &&
+          (layer.bounds.height <= 1.01 || layer.bounds.width <= 1.01)) {
+        return false;
+      }
+      return true;
+    }
     return false;
   });
   const actualBaseIndex = nodes.map(Boolean).indexOf(true);
@@ -1551,16 +1595,27 @@ function compile(manifest,options){
   manifest=normalized;
   options=options||{};
   const base=options.baseSchedule||S.buildBaseSchedule(manifest),schedule=S.customSchedule(base,options.customSegments,options.infinite);
-   const ordered=schedule.stateIds.map(id=>manifest.states.find(state=>state.id===id)).filter(Boolean),states=ordered.map(parseState),layerMaps=ordered.map(layerMap),ids=new Set();
+   const ordered=schedule.stateIds.map(id=>manifest.states.find(state=>state.id===id)).filter(Boolean),states=ordered.map(parseState),layerMaps=ordered.map(layerMap);
+  states.forEach(s => {
+    const mapping = buildStateMapping(s.state);
+    const newMap = new Map();
+    s.map.forEach((el, id) => {
+      const canonicalId = mapId(id, mapping);
+      newMap.set(canonicalId, el);
+    });
+    s.map = newMap;
+  });
+  const ids=new Set();
   states.forEach(state=>state.map.forEach((_,id)=>ids.add(id)));
   const tracks=[...ids].map(id=>buildTrack(id,states.map(state=>state.map.get(id)||null),layerMaps.map(map=>map.get(id)||null),states)).filter(Boolean);
   
   // Identify rotating groups
   const rotatingGroupIds = new Set();
   tracks.forEach(t => {
-    if (t.tag === 'g' && t.rotations) {
-      const hasRotation = t.rotations.some(r => r && r.angle !== 0);
-      if (hasRotation) {
+    if (t.tag === 'g') {
+      const hasRotation = t.rotations && t.rotations.some(r => r && r.angle !== 0);
+      const isRefreshRotor = t.id.includes('hugeiconsrefresh');
+      if (hasRotation || isRefreshRotor) {
         rotatingGroupIds.add(t.id);
       }
     }
