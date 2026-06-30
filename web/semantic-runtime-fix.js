@@ -2,10 +2,21 @@
   const compiler=window.SvgMotionCompiler;
   const core=window.__SMC;
   if(!compiler||!core)return;
+  function stripPieChartFilters(root){
+    if(!root||!root.querySelectorAll)return;
+    function walk(node){
+      if(!node)return;
+      if(node.hasAttribute&&node.hasAttribute('filter'))node.removeAttribute('filter');
+      const children=node.children||[];
+      for(let i=0;i<children.length;i++)walk(children[i]);
+    }
+    root.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"], [data-exact-ring]').forEach(walk);
+  }
   const compile=compiler.compile;
   compiler.compile=function(manifest,options){
     const result=compile(manifest,options);
     const doc=new DOMParser().parseFromString(result.svg,'image/svg+xml');
+    stripPieChartFilters(doc.documentElement);
     doc.querySelectorAll('script').forEach(function(script){
       let code=String(script.textContent||'');
       code=code.replace(')}function render',')};function render');

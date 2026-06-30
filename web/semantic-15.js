@@ -1208,6 +1208,15 @@ function getLayerParent(layer, state) {
   return state.layers.find(l => stripPrefix(l.stableNodeId) === stripPrefix(layer.parentStableNodeId));
 }
 
+function isActiveBarLayer(layer) {
+  return Boolean(
+    layer &&
+    layer.name &&
+    layer.name.toLowerCase().includes('active') &&
+    layer.bounds
+  );
+}
+
 function isLayerGloballyVisible(layer, state) {
   let curr = layer;
   while (curr) {
@@ -1313,7 +1322,9 @@ function buildTrack(id,nodes,layers,states){
       let baseParentX = 0, baseParentY = 0;
       let targetParentX = 0, targetParentY = 0;
       
-      if (baseParent) {
+      const useAbsoluteBounds = isActiveBarLayer(baseLayer) || isActiveBarLayer(targetLayer);
+
+      if (baseParent && !useAbsoluteBounds) {
         baseParentX = baseParent.bounds.x;
         baseParentY = baseParent.bounds.y;
         
@@ -1501,6 +1512,43 @@ function normalizeNestedTrackTransforms(tracks) {
       return multiplyAffine(parentInverse, matrix);
     });
   });
+}
+
+function stripPieChartFilters(root) {
+  if (!root || !root.querySelectorAll) return;
+
+  const clearFilterAttr = (node) => {
+    if (node && node.removeAttribute && node.hasAttribute('filter')) {
+      node.removeAttribute('filter');
+    }
+  };
+
+  const clearFiltersDeep = (node) => {
+    if (!node) return;
+    clearFilterAttr(node);
+    const children = node.children || [];
+    for (let i = 0; i < children.length; i++) {
+      clearFiltersDeep(children[i]);
+    }
+  };
+
+  root.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"]').forEach(node => {
+    clearFiltersDeep(node);
+  });
+
+  root.querySelectorAll('[data-exact-ring]').forEach(node => {
+    clearFiltersDeep(node);
+  });
+}
+
+function finalizePieChartSvg(svgText) {
+  if (!svgText || typeof DOMParser === 'undefined') return svgText;
+  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const root = doc.documentElement;
+  const error = doc.querySelector('parsererror');
+  if (error || !root) return svgText;
+  stripPieChartFilters(root);
+  return new XMLSerializer().serializeToString(root);
 }
 
 
@@ -1711,6 +1759,7 @@ function compile(manifest,options){
     baseSvg.appendChild(scene)
   }
   cloneMissingTracks(scene,tracks,states);
+  stripPieChartFilters(scene);
   const topSceneChild = (node) => {
     let current = node;
     while (current && current.parentNode && current.parentNode !== scene) current = current.parentNode;
@@ -1748,8 +1797,10 @@ function compile(manifest,options){
   const script=document.createElementNS(SVG_NS,'script');
   script.textContent=runtime(data);
   baseSvg.appendChild(script);
+  stripPieChartFilters(baseSvg);
   const report={renderMode:'multi-track-smart-animate',totalTracks:tracks.length,pathMorphTracks:tracks.filter(t=>t.pathMode).length,transformTracks:tracks.filter(t=>t.transforms.filter(Boolean).length>1).length,rotationTracks:tracks.filter(t=>t.rotations.filter(Boolean).length>1).length,colorTracks:tracks.filter(t=>t.colors.some(c=>Object.keys(c).length)).length,presenceTracks:tracks.filter(t=>t.present.some(Boolean)&&t.present.some(v=>!v)).length,fullStateSnapshots:0,embeddedMotionIds:true,genericAnimationTypes:['numeric-geometry','translate','scale','matrix-transform','rotation','opacity','visibility','solid-color','path-morph','appear-disappear']};
-  const svg='<?xml version="1.0" encoding="UTF-8"?>'+new XMLSerializer().serializeToString(baseSvg),html=S.buildHtml(svg,schedule),ir={version:5,startStateId:schedule.stateIds[0],stateOrder:schedule.stateIds.slice(),playback:{infinite:schedule.infinite,totalDuration:schedule.totalDuration,segments:schedule.segments},smartAnimate:report};
+  const serializedSvg = finalizePieChartSvg(new XMLSerializer().serializeToString(baseSvg));
+  const svg='<?xml version="1.0" encoding="UTF-8"?>'+serializedSvg,html=S.buildHtml(svg,schedule),ir={version:5,startStateId:schedule.stateIds[0],stateOrder:schedule.stateIds.slice(),playback:{infinite:schedule.infinite,totalDuration:schedule.totalDuration,segments:schedule.segments},smartAnimate:report};
   return{svg,html,ir,report:{report:Object.assign({manifestSchema:manifest.schema,prototypeReady:true,snapshotsReady:true,infinite:schedule.infinite,customDuration:schedule.totalDuration},report),schedule},schedule,semanticReport:report,normalizedManifest:normalized}
 }
 

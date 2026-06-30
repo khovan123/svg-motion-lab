@@ -4,6 +4,16 @@ const compiler=root.SvgMotionCompiler;
 const S=root.__SMC;
 if(!compiler||!S)return;
 const originalCompile=compiler.compile;
+function stripPieChartFilters(root){
+  if(!root||!root.querySelectorAll)return;
+  function walk(node){
+    if(!node)return;
+    if(node.hasAttribute&&node.hasAttribute('filter'))node.removeAttribute('filter');
+    const children=node.children||[];
+    for(let i=0;i<children.length;i++)walk(children[i]);
+  }
+  root.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"], [data-exact-ring]').forEach(walk);
+}
 function patchRuntime(source){
   let text=String(source||'');
   text=text.replace(/\)\}function render/g,')} ;function render');
@@ -18,6 +28,7 @@ function repair(result){
   const error=doc.querySelector('parsererror');
   if(error)throw new Error('SVG output không hợp lệ: '+error.textContent.slice(0,160));
   const svg=doc.documentElement;
+  stripPieChartFilters(svg);
   svg.querySelectorAll('script').forEach(script=>{script.textContent=patchRuntime(script.textContent)});
   result.svg='<?xml version="1.0" encoding="UTF-8"?>'+new XMLSerializer().serializeToString(svg);
   result.html=S.buildHtml(result.svg,result.schedule);
