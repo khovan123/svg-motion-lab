@@ -35,6 +35,45 @@ function runtime(data){
   return "(()=>{const D="+json+",svg=(document.currentScript&&(document.currentScript.closest('svg')||document.currentScript.ownerDocument.querySelector('#motion-svg')||document.currentScript.ownerDocument.documentElement))||document.querySelector('#motion-svg')||document.documentElement,rotor=svg.querySelector('[data-refresh-rotor]');if(!rotor)return;let start=performance.now(),manual=false,paused=false;const C=v=>Math.max(0,Math.min(1,v)),L=(a,b,p)=>a+(b-a)*p,E=p=>p*p*(3-2*p);function state(t){let active=0,segment=null;for(const s of D.segments){if(t<s.start){active=s.from;break}active=s.to;if(t>=s.start&&t<s.end){segment=s;break}}return{active,segment}}function render(t){const total=Math.max(.001,D.duration);t=D.infinite?((t%total)+total)%total:C(t/total)*total;const q=state(t),p=q.segment?E(C((t-q.segment.start)/Math.max(.001,q.segment.end-q.segment.start))):0,from=q.segment?q.segment.from:q.active,to=q.segment?q.segment.to:q.active;let a=D.angles[from],b=D.angles[to];while(b-a>180)b-=360;while(a-b>180)b+=360;const angle=a+(b-a)*p;rotor.setAttribute('transform','rotate('+angle+' '+D.cx+' '+D.cy+')')}function tick(now){if(!manual&&!paused)render((now-start)/1000);requestAnimationFrame(tick)}const previous=svg.__motionController||{};svg.__motionController={seek(t){manual=true;previous.seek&&previous.seek(t);render(Number(t)||0)},play(){manual=false;paused=false;start=performance.now();previous.play&&previous.play()},pause(){paused=true;previous.pause&&previous.pause()},restart(){manual=false;paused=false;start=performance.now();previous.restart&&previous.restart();render(0)}};render(0);requestAnimationFrame(tick)})()";
 }
 function pathNumbers(path){return String(path&&path.getAttribute('d')||'').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)||[]}
+function elementBounds(el){
+  if(!el||!el.tagName)return null;
+  const tag=String(el.tagName).toLowerCase();
+  if(tag==='rect'){
+    return{
+      x:Number(el.getAttribute('x')||0),
+      y:Number(el.getAttribute('y')||0),
+      width:Number(el.getAttribute('width')||0),
+      height:Number(el.getAttribute('height')||0)
+    };
+  }
+  if(tag==='path'){
+    const values=pathNumbers(el).map(Number);
+    if(!values.length)return null;
+    const xs=[],ys=[];
+    for(let i=0;i<values.length;i+=2){
+      if(Number.isFinite(values[i]))xs.push(values[i]);
+      if(Number.isFinite(values[i+1]))ys.push(values[i+1]);
+    }
+    if(!xs.length||!ys.length)return null;
+    const minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs),minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
+    return{x:minX,y:minY,width:maxX-minX,height:maxY-minY};
+  }
+  if(tag==='g'){
+    const children=[...el.children].map(elementBounds).filter(Boolean);
+    if(!children.length)return null;
+    const minX=Math.min.apply(null,children.map(item=>item.x));
+    const minY=Math.min.apply(null,children.map(item=>item.y));
+    const maxX=Math.max.apply(null,children.map(item=>item.x+item.width));
+    const maxY=Math.max.apply(null,children.map(item=>item.y+item.height));
+    return{x:minX,y:minY,width:maxX-minX,height:maxY-minY};
+  }
+  return null;
+}
+function boundsClose(a,b,tolerance){
+  if(!a||!b)return false;
+  const t=Number(tolerance)||0;
+  return Math.abs(a.x-b.x)<=t&&Math.abs(a.y-b.y)<=t&&Math.abs(a.width-b.width)<=t&&Math.abs(a.height-b.height)<=t;
+}
 function isPieFallback(group){
   const path=group&&group.querySelector('path');
   const values=pathNumbers(path).map(Number);
@@ -47,6 +86,19 @@ function patchFallbackScript(text){
   const needle="const visible=i===resolvedFrom||i===resolvedTo;child.setAttribute('visibility',visible?'visible':'hidden');if(resolvedFrom===resolvedTo)child.setAttribute('opacity',i===resolvedFrom?'1':'0');else child.setAttribute('opacity',i===resolvedTo&&q.segment?String(p):i===resolvedFrom?'1':'0')";
   const replacement="const swap=group.getAttribute('data-fallback-mode')==='swap',chosen=swap&&q.segment?(p<.5?resolvedFrom:resolvedTo):resolvedFrom,visible=swap?i===chosen:(i===resolvedFrom||i===resolvedTo);child.setAttribute('visibility',visible?'visible':'hidden');if(swap)child.setAttribute('opacity',i===chosen?'1':'0');else if(resolvedFrom===resolvedTo)child.setAttribute('opacity',i===resolvedFrom?'1':'0');else child.setAttribute('opacity',i===resolvedTo&&q.segment?String(p):i===resolvedFrom&&q.segment?String(1-p):i===resolvedFrom?'1':'0')";
   return source.includes(needle)?source.replace(needle,replacement):source;
+}
+function spinnerContainerInfo(manifest,schedule){
+  const stateMap=new Map((manifest.states||[]).map(state=>[state.id,state]));
+  const firstState=stateMap.get(schedule.stateIds[0]);
+  if(!firstState)return null;
+  const container=(firstState.layers||[]).find(layer=>layer.type==='FRAME'&&String(layer.stableNodeId||'').endsWith('@root/container[0]'));
+  const rotor=(firstState.layers||[]).find(layer=>layer.type==='FRAME'&&String(layer.stableNodeId||'').includes('/hugeiconsrefresh-03-stroke-rounded-1[0]'));
+  if(!container)return null;
+  return{
+    containerId:String(container.stableNodeId||''),
+    rotorId:rotor?String(rotor.stableNodeId||''):'',
+    bounds:container.bounds||null
+  };
 }
 function repair(result,manifest){
   const doc=new DOMParser().parseFromString(result.svg,'image/svg+xml');
@@ -74,54 +126,55 @@ function repair(result,manifest){
     wrongConnector.removeAttribute('data-track-index');
   }
 
-  // Fix spinner hierarchy: group the background circle and refresh arrows under a new Container frame group
-  // and assign data-motion-id="container[0]" to this group. This keeps them together so they sort and transition together.
+  // Fix spinner hierarchy: rebuild the container from the actual 64x64 card layers plus the rotor.
+  // The compiler can mis-assign @root/container[0] because the frame fill and its child spinner are emitted as siblings.
   const scene = svg.querySelector('#motion-scene');
-  let innerContainerPath = null;
+  const spinnerInfo=spinnerContainerInfo(manifest,result.schedule);
+  let wrongContainerEl = null;
   let refreshPath = null;
-  
+
   // Robust loop matching to bypass CSS escaping issues with brackets
   const allEls = svg.querySelectorAll('*');
   allEls.forEach(el => {
     const mid = el.getAttribute('data-motion-id') || '';
-    if (mid.endsWith('/container[0]') || mid === 'container[0]') {
-      innerContainerPath = el;
+    if (spinnerInfo && mid === spinnerInfo.containerId) {
+      wrongContainerEl = el;
     }
     if (mid.includes('hugeiconsrefresh-03-stroke-rounded-1')) {
       refreshPath = el;
     }
   });
 
-  if (scene && refreshPath && innerContainerPath) {
+  if (scene && refreshPath && spinnerInfo && spinnerInfo.bounds) {
     // Find the top-level children of scene containing these elements
     let rotorGroup = refreshPath;
     while (rotorGroup && rotorGroup.parentNode !== scene) {
       rotorGroup = rotorGroup.parentNode;
     }
-    let containerGroup = innerContainerPath;
-    while (containerGroup && containerGroup.parentNode !== scene) {
-      containerGroup = containerGroup.parentNode;
+    let wrongTop = wrongContainerEl;
+    while (wrongTop && wrongTop.parentNode !== scene) {
+      wrongTop = wrongTop.parentNode;
     }
-    
-    if (rotorGroup && containerGroup) {
+
+    const backgroundNodes=[...scene.children].filter(child=>{
+      if(child===rotorGroup)return false;
+      if(child.getAttribute&&child.getAttribute('data-exact-ring')==='true')return false;
+      if(child.getAttribute&&child.getAttribute('data-static-connector')==='true')return false;
+      const bounds=elementBounds(child);
+      return boundsClose(bounds,spinnerInfo.bounds,1.5);
+    });
+
+    if (rotorGroup && backgroundNodes.length) {
       const g = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.setAttribute('data-motion-id', '1:4181:@root/container[0]');
-      
-      // Move them into the new group
-      // We want the background circle to be behind the refresh arrows,
-      // so append innerContainerPath first, then rotorGroup
-      if (innerContainerPath.parentNode === containerGroup && containerGroup !== innerContainerPath) {
-        g.appendChild(innerContainerPath);
-        containerGroup.remove();
-      } else {
-        g.appendChild(containerGroup);
-      }
-      
+      g.setAttribute('data-motion-id', spinnerInfo.containerId);
+      const insertBefore=backgroundNodes[0];
+      const insertAnchor=insertBefore&&insertBefore.nextSibling;
+      backgroundNodes.forEach(node=>g.appendChild(node));
       g.appendChild(rotorGroup);
-      scene.appendChild(g);
-      
-      // Remove from the inner path to avoid duplicate ID matching
-      innerContainerPath.removeAttribute('data-motion-id');
+      if(wrongContainerEl&&wrongContainerEl!==g)wrongContainerEl.removeAttribute('data-motion-id');
+      if(insertBefore&&insertBefore.parentNode===scene)scene.insertBefore(g,insertBefore);
+      else if(insertAnchor&&insertAnchor.parentNode===scene)scene.insertBefore(g,insertAnchor);
+      else scene.appendChild(g);
     }
   }
 

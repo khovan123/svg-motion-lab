@@ -21,7 +21,9 @@ async function build(options){
     expandedSelected.push(node);
    }
   }
- const roots=order(expandedSelected.length?expandedSelected:figma.currentPage.children.flatMap(n=>n.type==='COMPONENT_SET'?n.children.filter(isState):[n]).filter(isState));
+ const uniqueExpandedSelected=uniqueStateNodes(expandedSelected);
+ const pageStates=uniqueStateNodes(figma.currentPage.children.flatMap(n=>n.type==='COMPONENT_SET'?n.children.filter(isState):[n]).filter(isState));
+ const roots=order(uniqueExpandedSelected.length?uniqueExpandedSelected:pageStates);
  if(!roots.length)throw new Error('Hãy chọn ít nhất một state.');
  const states=[];
  for(let i=0;i<roots.length;i++){
@@ -78,6 +80,7 @@ function annotate(a,stateMap,rootIds){if(!a||typeof a!=='object')return a;const 
 function legacy(rs){return rs.map(r=>{const a=findAction(r.actions);return a&&a.destinationStateId?{from:r.sourceStateId,to:a.destinationStateId,trigger:r.trigger,navigation:a.navigation||null,transition:a.transition||null}:null}).filter(Boolean)}
 function findAction(as){for(const a of as||[]){if(a&&a.type==='NODE'&&a.destinationStateId)return a}return null}
 function order(ns){return[...ns].sort((a,b)=>{const ay=a.absoluteBoundingBox?a.absoluteBoundingBox.y:a.y||0,by=b.absoluteBoundingBox?b.absoluteBoundingBox.y:b.y||0;if(Math.abs(ay-by)>8)return ay-by;const ax=a.absoluteBoundingBox?a.absoluteBoundingBox.x:a.x||0,bx=b.absoluteBoundingBox?b.absoluteBoundingBox.x:b.x||0;return ax-bx})}
+function uniqueStateNodes(ns){const seen=new Set(),out=[];for(const node of ns){if(!node||seen.has(node.id))continue;seen.add(node.id);out.push(node)}return out}
 function isState(n){return n&&['FRAME','COMPONENT','INSTANCE','COMPONENT_SET'].includes(n.type)}function mapState(n,id,m){m.set(n.id,id);if('children'in n)n.children.forEach(c=>mapState(c,id,m))}function visit(n,f){f(n);if('children'in n)n.children.forEach(c=>visit(c,f))}function reactions(n){return'reactions'in n&&Array.isArray(n.reactions)?n.reactions:[]}function actions(r){return Array.isArray(r.actions)?r.actions:r.action?[r.action]:[]}function plugin(n){try{return n.getSharedPluginData(NS,KEY)||n.getPluginData(KEY)||''}catch(e){return''}}function slug(v){return String(v||'layer').trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]+/g,'').replace(/-+/g,'-')||'layer'}function n(v){v=Number(v);return Number.isFinite(v)?Math.round(v*1e5)/1e5:0}function pt(v){return{x:n(v.x),y:n(v.y)}}function mat(v){return Array.isArray(v)?v.map(r=>r.map(n)):null}function color(v){return{r:n(v.r),g:n(v.g),b:n(v.b),a:n(v.a==null?1:v.a)}}function clone(v){return v==null?v:JSON.parse(JSON.stringify(v))}function utf8(bytes){let out='',i=0;while(i<bytes.length){const a=bytes[i++];if(a<128){out+=String.fromCharCode(a);continue}if((a&224)===192){const b=bytes[i++];out+=String.fromCharCode(((a&31)<<6)|(b&63));continue}if((a&240)===224){const b=bytes[i++],c=bytes[i++];out+=String.fromCharCode(((a&15)<<12)|((b&63)<<6)|(c&63));continue}if((a&248)===240){const b=bytes[i++],c=bytes[i++],d=bytes[i++];let cp=((a&7)<<18)|((b&63)<<12)|((c&63)<<6)|(d&63);cp-=65536;out+=String.fromCharCode(55296+(cp>>10),56320+(cp&1023));continue}out+=''}return out}
 async function mapInstances(roots, stateMap) {
   const instances = figma.currentPage.findAll(n => n.type === 'INSTANCE');

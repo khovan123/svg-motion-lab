@@ -1,0 +1,37 @@
+id: ci-deployment
+name: CI Deployment
+description: Use for Docker, GitHub Actions, build logs, deploy failures, environment variables, and release pipelines.
+positive_triggers:
+  prompts:
+    - "ci"
+    - "github actions"
+    - "docker"
+    - "deploy"
+    - "build failed"
+    - "pipeline"
+    - "environment"
+    - "secret"
+  files:
+    - ".github/workflows/*"
+    - "Dockerfile"
+    - "docker-compose.yml"
+    - "railway.json"
+    - "render.yaml"
+  dependencies:
+    - package.json
+evidence:
+  files:
+    - ".github/workflows/*"
+    - "Dockerfile"
+    - "docker-compose.yml"
+    - "railway.json"
+  dependencies:
+    - package.json
+negative_triggers:
+  prompts:
+    - "local ui styling only"
+workflow:
+  - Inspect repo evidence before choosing an implementation path.
+  - Read the suggested files and nearest tests.
+  - Implement the smallest scoped change.
+  - Run focused verification and summarize evidence.

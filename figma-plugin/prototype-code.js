@@ -39,7 +39,10 @@ async function exportManifest(options) {
       expandedSelected.push(node);
     }
   }
-  const candidates = expandedSelected.length ? expandedSelected : figma.currentPage.children.filter(isState);
+  const uniqueExpandedSelected = uniqueStateNodes(expandedSelected);
+  const candidates = uniqueExpandedSelected.length
+    ? uniqueExpandedSelected
+    : uniqueStateNodes(figma.currentPage.children.filter(isState));
   if (!candidates.length) throw new Error("Hãy chọn ít nhất một Frame, Component hoặc Instance state.");
 
   figma.ui.postMessage({ type: "progress", message: "Bước 2/4 · Đang xác định thứ tự state…" });
@@ -314,6 +317,17 @@ function orderStates(nodes) {
     const bx = b.absoluteBoundingBox ? b.absoluteBoundingBox.x : b.x || 0;
     return ax - bx;
   });
+}
+
+function uniqueStateNodes(nodes) {
+  const seen = new Set();
+  const unique = [];
+  for (const node of nodes) {
+    if (!node || seen.has(node.id)) continue;
+    seen.add(node.id);
+    unique.push(node);
+  }
+  return unique;
 }
 
 function variantContext(root) {

@@ -1,0 +1,34 @@
+id: project-implementation
+name: Project Implementation
+description: Use for normal feature work, bug fixes, and scoped implementation tasks in this repository.
+positive_triggers:
+  prompts:
+    - "implement"
+    - "fix"
+    - "add"
+    - "update"
+    - "refactor"
+    - "bug"
+  files:
+    - "src/**"
+    - "apps/**"
+    - "services/**"
+    - "libs/**"
+  dependencies:
+    - package.json
+evidence:
+  files:
+    - "src/**"
+    - "apps/**"
+    - "services/**"
+    - "libs/**"
+  dependencies:
+    - package.json
+negative_triggers:
+  prompts:
+    - "release notes only"
+workflow:
+  - Inspect repo evidence before choosing an implementation path.
+  - Read the suggested files and nearest tests.
+  - Implement the smallest scoped change.
+  - Run focused verification and summarize evidence.

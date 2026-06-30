@@ -37,10 +37,34 @@ function parseStateSvg(state){
   if(error)throw new Error('Không thể parse ring state '+(state.name||state.id)+': '+error.textContent.slice(0,160));
   return documentNode.documentElement;
 }
+function normalizeMarkup(value){
+  return String(value||'').replace(/\s+/g,' ').trim();
+}
+function ringSignature(elements){
+  return elements.map(element=>{
+    const clone=element.cloneNode(true);
+    [clone,...clone.querySelectorAll('*')].forEach(node=>{
+      if(!node.getAttribute)return;
+      node.removeAttribute('data-motion-id');
+      node.removeAttribute('id');
+      ['fill','stroke','filter','clip-path','mask','href','xlink:href','style'].forEach(name=>{
+        if(!node.hasAttribute(name))return;
+        node.setAttribute(name,node.getAttribute(name).replace(/url\(#([^)]+)\)/g,'url(#ref)'));
+      });
+    });
+    return normalizeMarkup(clone.outerHTML);
+  }).join('');
+}
 function isConnector(element){
   return element&&String(element.tagName).toLowerCase()==='path'&&element.hasAttribute('stroke-dasharray');
 }
 function checkIsPie(element) {
+  // Never classify container or rotor elements as pie chart
+  const motionId = element.getAttribute('data-motion-id') || '';
+  if (motionId.includes('container') || motionId.includes('hugeiconsrefresh')) return false;
+  const hasRotorDescendant = element.querySelector && element.querySelector('[data-motion-id*="container"],[data-motion-id*="hugeiconsrefresh"]');
+  if (hasRotorDescendant) return false;
+
   const tag = String(element.tagName).toLowerCase();
   if (tag === 'mask' || tag === 'g' || tag === 'path') {
     const paths = tag === 'path' ? [element] : Array.from(element.querySelectorAll('path'));
@@ -57,7 +81,6 @@ function checkIsPie(element) {
       }
     }
   }
-  const motionId = element.getAttribute('data-motion-id') || '';
   return motionId.includes('piechart');
 }
 function ringElements(source){
@@ -108,11 +131,24 @@ function repair(result,manifest){
   result.schedule.stateIds.forEach(id => {
     if (!uniqueStateIds.includes(id)) uniqueStateIds.push(id);
   });
+  const signatureToIndex = new Map();
+  const stateIndexMap = new Map();
+  let dedupedStateCount = 0;
 
-  uniqueStateIds.forEach((stateId,index)=>{
+  uniqueStateIds.forEach((stateId)=>{
     const state=stateById.get(stateId);
     if(!state)return;
     const source=parseStateSvg(state);
+    const stateRingElements=ringElements(source);
+    const signature=ringSignature(stateRingElements);
+    const existingIndex=signatureToIndex.get(signature);
+    if(existingIndex!=null){
+      stateIndexMap.set(stateId,existingIndex);
+      return;
+    }
+    const index=dedupedStateCount++;
+    signatureToIndex.set(signature,index);
+    stateIndexMap.set(stateId,index);
     const wrapper=documentNode.createElementNS(SVG_NS,'g');
     wrapper.setAttribute('data-ring-state',String(index));
     wrapper.setAttribute('visibility',index===0?'visible':'hidden');
@@ -127,7 +163,7 @@ function repair(result,manifest){
         }
       }
     });
-    ringElements(source).forEach(element=>{
+    stateRingElements.forEach(element=>{
       const clone=element.cloneNode(true);
       clone.removeAttribute('data-motion-id');
       clone.querySelectorAll('[data-motion-id]').forEach(el => el.removeAttribute('data-motion-id'));
@@ -155,8 +191,8 @@ function repair(result,manifest){
     duration:result.schedule.totalDuration,
     infinite:result.schedule.infinite,
     segments:result.schedule.segments.map(segment=>({
-      from:uniqueStateIds.indexOf(segment.from),
-      to:uniqueStateIds.indexOf(segment.to),
+      from:stateIndexMap.get(segment.from),
+      to:stateIndexMap.get(segment.to),
       start:segment.transitionStart,
       end:segment.transitionEnd
     }))
@@ -164,7 +200,7 @@ function repair(result,manifest){
   svg.appendChild(script);
   result.svg='<?xml version="1.0" encoding="UTF-8"?>'+new XMLSerializer().serializeToString(svg);
   result.html=S.buildHtml(result.svg,result.schedule);
-  result.semanticReport=Object.assign({},result.semanticReport||{},{exactRingSubtrees:true,ringStateCount:exactRoot.children.length,ringDefinitionReferencesNormalized:true});
+  result.semanticReport=Object.assign({},result.semanticReport||{},{exactRingSubtrees:true,ringStateCount:exactRoot.children.length,ringDefinitionReferencesNormalized:true,ringStateDedupedCount:dedupedStateCount,ringStateSourceCount:uniqueStateIds.length});
   if(result.report&&result.report.report){
     result.report.report=Object.assign({},result.report.report,result.semanticReport);
   }

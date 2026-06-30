@@ -1,0 +1,41 @@
+id: nextjs-web
+name: Next.js Web
+description: Use for Next.js routes, App Router, server/client component boundaries, Vercel deploys, and web UI tasks.
+positive_triggers:
+  prompts:
+    - "next"
+    - "nextjs"
+    - "app router"
+    - "route"
+    - "page"
+    - "component"
+    - "vercel"
+    - "webapp"
+  files:
+    - "app/**"
+    - "pages/**"
+    - "next.config.*"
+    - "vercel.json"
+  dependencies:
+    - "next"
+    - "react"
+evidence:
+  files:
+    - "app/**"
+    - "pages/**"
+    - "next.config.*"
+    - "vercel.json"
+  dependencies:
+    - "next"
+    - "react"
+negative_triggers:
+  prompts:
+    - "expo"
+    - "eas"
+    - "android"
+    - "ios"
+workflow:
+  - Inspect repo evidence before choosing an implementation path.
+  - Read the suggested files and nearest tests.
+  - Implement the smallest scoped change.
+  - Run focused verification and summarize evidence.

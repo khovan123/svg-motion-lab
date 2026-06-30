@@ -186,4 +186,42 @@ const avatarResult = compileManifest(avatarManifest);
 assert.ok(avatarResult.svg.includes("pattern0_motion_shared_state0"), "avatar manifest should preserve avatar pattern defs");
 assert.ok(avatarResult.svg.includes("image0_motion_shared_state0"), "avatar manifest should preserve image defs referenced by avatar patterns");
 assert.ok(avatarResult.svg.includes("data:image/png;base64,"), "avatar manifest should keep embedded avatar image data");
+const avatarDoc = new JSDOM(avatarResult.svg, { contentType: "image/svg+xml" }).window.document;
+avatarDoc.querySelectorAll('[data-motion-id*="@root/piechart["], [data-exact-ring]').forEach(node => {
+  assert.ok(!node.hasAttribute("filter"), "pie chart containers should not keep direct filter attributes");
+  node.querySelectorAll("[filter]").forEach(child => {
+    assert.fail("pie chart/exact ring descendants should not keep filter attributes");
+  });
+});
+
+const liveManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../motion-manifest.json"), "utf8"));
+const liveResult = compileManifest(liveManifest);
+const liveDoc = new JSDOM(liveResult.svg, { contentType: "image/svg+xml" }).window.document;
+const liveRuntimeMatch = liveResult.svg.match(/const D=(\{.*?\}),svg=/s);
+assert.ok(liveRuntimeMatch, "live manifest should embed runtime data");
+const liveRuntimeData = JSON.parse(liveRuntimeMatch[1]);
+liveDoc.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"], [data-exact-ring]').forEach(node => {
+  assert.ok(!node.hasAttribute("filter"), "live pie chart containers should not keep direct filter attributes");
+  node.querySelectorAll("[filter]").forEach(child => {
+    assert.fail("live pie chart descendants should not keep filter attributes");
+  });
+});
+const liveRingStates = [...liveDoc.querySelectorAll("[data-exact-ring] > [data-ring-state]")];
+assert.ok(liveRingStates.length > 0, "live manifest should build exact ring states");
+assert.ok(liveRingStates.length < liveManifest.stateOrder.length, "identical pie chart states should be deduplicated instead of crossfading per frame");
+assert.strictEqual(liveResult.report.ringStateSourceCount, liveManifest.stateOrder.length, "ring runtime should still track the original frame count");
+assert.strictEqual(liveResult.report.ringStateDedupedCount, liveRingStates.length, "reported ring state dedupe count should match emitted ring states");
+const firstBarTrack = liveRuntimeData.tracks.find(track => track.id === "1:4181:@root/bar-chart[0]/1st-column[0]/active[0]");
+assert.ok(firstBarTrack, "live manifest should contain first bar active track");
+assert.ok(firstBarTrack.transforms[2][5] > 110, "first bar collapsed transform should stay anchored near the baseline like the other bars");
+const spinnerContainer = liveDoc.querySelector('[data-motion-id="1:4181:@root/container[0]"]');
+assert.ok(spinnerContainer, "live manifest should preserve spinner container output");
+assert.strictEqual(spinnerContainer.tagName.toLowerCase(), "g", "spinner container should compile as a wrapper group");
+const spinnerRotor = spinnerContainer.querySelector("[data-refresh-rotor]");
+assert.ok(spinnerRotor, "spinner container should keep the refresh rotor inside the wrapper");
+const spinnerBackgrounds = [...spinnerContainer.children].filter(child => {
+  const bounds = getPathBounds(child.getAttribute("d") || "");
+  return bounds.width > 60 && bounds.width < 70 && bounds.height > 60 && bounds.height < 70;
+});
+assert.ok(spinnerBackgrounds.length >= 2, "spinner container should keep both 64x64 card background layers");
 console.log("compiler.test.js: OK");
