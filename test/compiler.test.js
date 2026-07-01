@@ -152,6 +152,72 @@ function getPathBounds(d) {
     height: maxY - minY
   };
 }
+function buildManifestIndex(state) {
+  const layers = state.layers || [];
+  const byParent = new Map();
+  for (const layer of layers) {
+    const parent = layer.parentStableNodeId || "";
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push(layer);
+  }
+  const root = layers.find(layer => String(layer.stableNodeId || "").endsWith(":@root")) || layers.find(layer => !layer.parentStableNodeId) || null;
+  return { layers, byParent, root };
+}
+function inferSpecialLayers(manifest) {
+  const state = manifest.states[0];
+  const index = buildManifestIndex(state);
+  const rootId = index.root && index.root.stableNodeId;
+  const rootChildren = (index.byParent.get(rootId) || []).slice();
+  const connector = rootChildren.find(layer => layer.type === "VECTOR" && (layer.strokes || []).length > 0 && (layer.fills || []).length === 0) || null;
+  const spinnerContainer = rootChildren.find(layer => {
+    if (layer.type !== "FRAME") return false;
+    if ((layer.fills || []).length < 2) return false;
+    const children = index.byParent.get(layer.stableNodeId) || [];
+    return children.length === 1 && children[0].type === "FRAME";
+  }) || null;
+  const spinnerRotor = spinnerContainer ? (index.byParent.get(spinnerContainer.stableNodeId) || []).find(layer => layer.type === "FRAME") || null : null;
+  const pie = rootChildren.find(layer => {
+    if (layer.type !== "FRAME") return false;
+    if ((layer.fills || []).length || (layer.strokes || []).length || (layer.effects || []).length) return false;
+    const children = index.byParent.get(layer.stableNodeId) || [];
+    const ellipseCount = children.filter(child => child.type === "ELLIPSE").length;
+    const groupCount = children.filter(child => child.type === "GROUP").length;
+    return ellipseCount >= 1 && groupCount >= 3;
+  }) || null;
+  const pieIds = new Set();
+  if (pie) {
+    const stack = [pie.stableNodeId];
+    while (stack.length) {
+      const id = stack.pop();
+      pieIds.add(id);
+      for (const child of index.byParent.get(id) || []) {
+        stack.push(child.stableNodeId);
+      }
+    }
+  }
+  const barChart = rootChildren.find(layer => {
+    if (layer.type !== "FRAME") return false;
+    const children = index.byParent.get(layer.stableNodeId) || [];
+    return children.length === 4 && children.every(child => child.type === "FRAME");
+  }) || null;
+  let firstBarActive = null;
+  let firstColumnBounds = null;
+  if (barChart) {
+    const columns = (index.byParent.get(barChart.stableNodeId) || []).slice().sort((a, b) => a.bounds.x - b.bounds.x);
+    const firstColumn = columns[0];
+    firstBarActive = ((index.byParent.get(firstColumn.stableNodeId) || []).filter(layer => layer.type === "RECTANGLE" && (layer.fills || []).length > 0).sort((a, b) => a.bounds.height - b.bounds.height))[0] || null;
+    firstColumnBounds = firstColumn && firstColumn.bounds;
+  }
+  return {
+    connectorId: connector && connector.stableNodeId,
+    spinnerContainerId: spinnerContainer && spinnerContainer.stableNodeId,
+    spinnerRotorId: spinnerRotor && spinnerRotor.stableNodeId,
+    spinnerContainerBounds: spinnerContainer && spinnerContainer.bounds,
+    pieIds,
+    firstBarActiveId: firstBarActive && firstBarActive.stableNodeId,
+    firstColumnBounds
+  };
+}
 
 const rootManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/progress-bar-manifest.json"), "utf8"));
 const rootResult = compileManifest(rootManifest);
@@ -195,33 +261,90 @@ avatarDoc.querySelectorAll('[data-motion-id*="@root/piechart["], [data-exact-rin
 });
 
 const liveManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../motion-manifest.json"), "utf8"));
+const liveSpecialLayers = inferSpecialLayers(liveManifest);
 const liveResult = compileManifest(liveManifest);
 const liveDoc = new JSDOM(liveResult.svg, { contentType: "image/svg+xml" }).window.document;
 const liveRuntimeMatch = liveResult.svg.match(/const D=(\{.*?\}),svg=/s);
 assert.ok(liveRuntimeMatch, "live manifest should embed runtime data");
 const liveRuntimeData = JSON.parse(liveRuntimeMatch[1]);
-liveDoc.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"], [data-exact-ring]').forEach(node => {
+const livePieNodes = [...liveDoc.querySelectorAll("[data-motion-id], [data-exact-ring]")].filter(node => {
+  if (node.hasAttribute("data-exact-ring")) return true;
+  const motionId = node.getAttribute("data-motion-id");
+  return motionId && liveSpecialLayers.pieIds.has(motionId);
+});
+livePieNodes.forEach(node => {
   assert.ok(!node.hasAttribute("filter"), "live pie chart containers should not keep direct filter attributes");
   node.querySelectorAll("[filter]").forEach(child => {
     assert.fail("live pie chart descendants should not keep filter attributes");
   });
 });
-const liveRingStates = [...liveDoc.querySelectorAll("[data-exact-ring] > [data-ring-state]")];
-assert.ok(liveRingStates.length > 0, "live manifest should build exact ring states");
-assert.ok(liveRingStates.length < liveManifest.stateOrder.length, "identical pie chart states should be deduplicated instead of crossfading per frame");
-assert.strictEqual(liveResult.report.ringStateSourceCount, liveManifest.stateOrder.length, "ring runtime should still track the original frame count");
-assert.strictEqual(liveResult.report.ringStateDedupedCount, liveRingStates.length, "reported ring state dedupe count should match emitted ring states");
-const firstBarTrack = liveRuntimeData.tracks.find(track => track.id === "1:4181:@root/bar-chart[0]/1st-column[0]/active[0]");
+const liveExactRing = liveDoc.querySelector("[data-exact-ring]");
+assert.ok(liveExactRing, "live manifest should emit the exact pie ring wrapper");
+const liveRingSlots = [...liveExactRing.querySelectorAll("[data-ring-slot]")];
+assert.strictEqual(liveRingSlots.length, 4, "live manifest should emit four persistent semantic pie slices");
+assert.strictEqual(liveResult.report.ringSlotCount, liveRingSlots.length, "reported ring slot count should match emitted semantic slices");
+assert.strictEqual(liveResult.report.ringStateSourceCount, liveManifest.stateOrder.length, "ring runtime should track the original frame count");
+assert.strictEqual(liveResult.report.ringStateDedupedCount, liveManifest.stateOrder.length, "reported ring state count should match the sampled manifest states");
+const liveRingScript = [...liveDoc.querySelectorAll("script")].find(node => (node.textContent || "").includes("[data-ring-slot]"));
+assert.ok(liveRingScript, "live manifest should embed a semantic exact ring runtime");
+const liveRingRuntimeMatch = (liveRingScript.textContent || "").match(/const D=(\{.*?\}),svg=/s);
+assert.ok(liveRingRuntimeMatch, "semantic exact ring runtime should embed its state samples");
+const liveRingRuntimeData = JSON.parse(liveRingRuntimeMatch[1]);
+assert.strictEqual(liveRingRuntimeData.states.length, liveManifest.stateOrder.length, "semantic ring runtime should preserve one sampled state per frame");
+liveManifest.stateOrder.forEach((stateId, index) => {
+  const sourceState = liveManifest.states.find(state => state.id === stateId);
+  assert.ok(sourceState, `live manifest should contain source state ${stateId}`);
+  const normalizedSourceSvg = String(sourceState.svg || "").replace(new RegExp(stateId.replace(/:/g, "_"), "g"), "motion_shared");
+  const sourceDoc = new JSDOM(normalizedSourceSvg, { contentType: "image/svg+xml" }).window.document;
+  const expectedPaths = [...sourceDoc.querySelectorAll("g[mask] path")].map(pathNode => (pathNode.getAttribute("d") || "").replace(/\s+/g, " ").trim());
+  const normalizeFillRef = value => String(value || "").replace(/_state\d+/g, "_state").replace(/_state(?![a-zA-Z0-9_-])/g, "").replace(/\s+/g, " ").trim();
+  const expectedFills = [...sourceDoc.querySelectorAll("g[mask] path")].map(pathNode => normalizeFillRef(pathNode.getAttribute("fill") || ""));
+  const actualPaths = liveRingRuntimeData.states[index].map(sample => (sample.d || "").replace(/\s+/g, " ").trim());
+  const actualFills = liveRingRuntimeData.states[index].map(sample => normalizeFillRef(sample.fill || ""));
+  assert.deepStrictEqual(actualPaths, expectedPaths, `exact pie ring state ${index} should preserve the masked pie paths exported from manifest state ${stateId}`);
+  assert.deepStrictEqual(actualFills, expectedFills, `exact pie ring state ${index} should preserve the manifest pie fills for ${stateId}`);
+});
+const liveExactRingStaticChildren = [...liveExactRing.children].filter(node => !node.hasAttribute("data-ring-slot"));
+assert.ok(liveExactRingStaticChildren.length <= 1, "exact pie ring should only hoist one shared static shell");
+assert.strictEqual(liveResult.report.ringStateCount, liveManifest.stateOrder.length, "reported ring state count should describe the sampled manifest states");
+assert.ok(liveResult.svg.includes("slot.setAttribute('visibility',sample?'visible':'hidden')"), "exact pie ring runtime should update persistent semantic slices instead of crossfading subtree snapshots");
+assert.ok(liveResult.svg.includes("swapBar=/^@root\\/bar-chart\\[0\\]\\/.*\\/(?:background|active)\\[0\\]$/"), "bar chart runtime should swap sampled bar states instead of interpolating active colors");
+liveExactRingStaticChildren.forEach(node => {
+  const markup = node.outerHTML || "";
+  assert.ok(/opacity="0\.9"/.test(markup), "shared pie shell should preserve the donut shell opacity");
+});
+liveExactRing.querySelectorAll("[data-motion-id]").forEach(node => {
+  const motionId = node.getAttribute("data-motion-id") || "";
+  assert.ok(!motionId.includes("@root/bar-chart["), "exact pie ring should not leak bar chart nodes into pie sample states");
+});
+const unresolvedSharedRefs = new Set();
+[liveExactRing, ...liveRingSlots].forEach(node => {
+  [node, ...node.querySelectorAll("*")].forEach(child => {
+    ["fill", "stroke", "filter", "clip-path", "mask", "href", "xlink:href", "style"].forEach(name => {
+      const value = child.getAttribute && child.getAttribute(name);
+      if (!value) return;
+      value.replace(/url\(#([^)]+)\)/g, (match, id) => {
+        if (/_motion_shared$/.test(id)) unresolvedSharedRefs.add(id);
+        return match;
+      });
+      if ((name === "href" || name === "xlink:href") && /^#.+/.test(value) && /_motion_shared$/.test(value.slice(1))) {
+        unresolvedSharedRefs.add(value.slice(1));
+      }
+    });
+  });
+});
+assert.deepStrictEqual([...unresolvedSharedRefs], [], "exact pie ring should rewrite normalized shared refs to concrete state defs");
+const firstBarTrack = liveRuntimeData.tracks.find(track => track.id === liveSpecialLayers.firstBarActiveId);
 assert.ok(firstBarTrack, "live manifest should contain first bar active track");
-assert.ok(firstBarTrack.transforms[2][5] > 110, "first bar collapsed transform should stay anchored near the baseline like the other bars");
-const spinnerContainer = liveDoc.querySelector('[data-motion-id="1:4181:@root/container[0]"]');
+assert.ok(firstBarTrack.transforms[2][5] > liveSpecialLayers.firstColumnBounds.y + liveSpecialLayers.firstColumnBounds.height - 12, "first bar collapsed transform should stay anchored near the baseline like the other bars");
+const spinnerContainer = [...liveDoc.querySelectorAll("[data-motion-id]")].find(node => node.getAttribute("data-motion-id") === liveSpecialLayers.spinnerContainerId);
 assert.ok(spinnerContainer, "live manifest should preserve spinner container output");
 assert.strictEqual(spinnerContainer.tagName.toLowerCase(), "g", "spinner container should compile as a wrapper group");
-const spinnerRotor = spinnerContainer.querySelector("[data-refresh-rotor]");
+const spinnerRotor = [...spinnerContainer.querySelectorAll("[data-motion-id], [data-refresh-rotor]")].find(node => node.hasAttribute("data-refresh-rotor") || node.getAttribute("data-motion-id") === liveSpecialLayers.spinnerRotorId);
 assert.ok(spinnerRotor, "spinner container should keep the refresh rotor inside the wrapper");
 const spinnerBackgrounds = [...spinnerContainer.children].filter(child => {
   const bounds = getPathBounds(child.getAttribute("d") || "");
-  return bounds.width > 60 && bounds.width < 70 && bounds.height > 60 && bounds.height < 70;
+  return Math.abs(bounds.width - liveSpecialLayers.spinnerContainerBounds.width) < 1 && Math.abs(bounds.height - liveSpecialLayers.spinnerContainerBounds.height) < 1;
 });
 assert.ok(spinnerBackgrounds.length >= 2, "spinner container should keep both 64x64 card background layers");
 console.log("compiler.test.js: OK");

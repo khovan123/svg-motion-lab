@@ -18,16 +18,70 @@ function unwrapAngles(values){
   });
   return out;
 }
+function firstStateForSchedule(manifest,schedule){
+  const stateMap=new Map((manifest.states||[]).map(state=>[state.id,state]));
+  return stateMap.get(schedule.stateIds[0])||manifest.states&&manifest.states[0]||null;
+}
+function buildManifestIndex(state){
+  const layers=state&&state.layers||[];
+  const byParent=new Map();
+  layers.forEach(layer=>{
+    const parent=layer.parentStableNodeId||'';
+    if(!byParent.has(parent))byParent.set(parent,[]);
+    byParent.get(parent).push(layer);
+  });
+  const root=layers.find(layer=>String(layer.stableNodeId||'').endsWith(':@root'))||layers.find(layer=>!layer.parentStableNodeId)||null;
+  return{layers,byParent,root};
+}
+function inferSpinnerInfo(manifest,schedule){
+  const state=firstStateForSchedule(manifest,schedule);
+  const index=buildManifestIndex(state);
+  const rootId=index.root&&index.root.stableNodeId;
+  if(!rootId)return null;
+  const rootChildren=index.byParent.get(rootId)||[];
+  const container=rootChildren.find(layer=>{
+    if(layer.type!=='FRAME')return false;
+    if((layer.fills||[]).length<2)return false;
+    const children=index.byParent.get(layer.stableNodeId)||[];
+    if(children.length!==1||children[0].type!=='FRAME')return false;
+    const child=children[0];
+    return child.bounds&&layer.bounds&&child.bounds.width<layer.bounds.width&&child.bounds.height<layer.bounds.height;
+  });
+  if(!container)return null;
+  const rotor=(index.byParent.get(container.stableNodeId)||[]).find(layer=>layer.type==='FRAME')||null;
+  return{
+    containerId:String(container.stableNodeId||''),
+    rotorId:rotor?String(rotor.stableNodeId||''):'',
+    bounds:container.bounds||null
+  };
+}
+function inferConnectorInfo(manifest,schedule){
+  const state=firstStateForSchedule(manifest,schedule);
+  const index=buildManifestIndex(state);
+  const rootId=index.root&&index.root.stableNodeId;
+  if(!rootId)return null;
+  const rootChildren=index.byParent.get(rootId)||[];
+  const connector=rootChildren.find(layer=>{
+    return layer.type==='VECTOR'&&(layer.strokes||[]).length>0&&(layer.fills||[]).length===0;
+  })||null;
+  return connector?{id:String(connector.stableNodeId||''),bounds:connector.bounds||null}:null;
+}
 function refreshMotion(manifest,schedule){
   const stateMap=new Map((manifest.states||[]).map(state=>[state.id,state]));
+  const spinnerInfo=inferSpinnerInfo(manifest,schedule);
   const rotations=schedule.stateIds.map(id=>{
     const state=stateMap.get(id);
-    const layer=(state&&state.layers||[]).find(item=>item.type==='FRAME'&&String(item.stableNodeId||'').includes('/hugeiconsrefresh-03-stroke-rounded-1[0]'));
+    const layer=(state&&state.layers||[]).find(item=>item.type==='FRAME'&&spinnerInfo&&String(item.stableNodeId||'')===spinnerInfo.rotorId);
     return layer?Number(layer.rotation)||0:0;
   });
   const firstState=stateMap.get(schedule.stateIds[0]);
-  const firstLayer=(firstState&&firstState.layers||[]).find(item=>item.type==='FRAME'&&String(item.stableNodeId||'').includes('/hugeiconsrefresh-03-stroke-rounded-1[0]'));
-  const bounds=firstLayer&&firstLayer.bounds||{x:165,y:169,width:24,height:24};
+  const firstLayer=(firstState&&firstState.layers||[]).find(item=>item.type==='FRAME'&&spinnerInfo&&String(item.stableNodeId||'')===spinnerInfo.rotorId);
+  const bounds=firstLayer&&firstLayer.bounds||spinnerInfo&&spinnerInfo.bounds&&{
+    x:Number(spinnerInfo.bounds.x)+Number(spinnerInfo.bounds.width||0)/2-12,
+    y:Number(spinnerInfo.bounds.y)+Number(spinnerInfo.bounds.height||0)/2-12,
+    width:24,
+    height:24
+  }||{x:0,y:0,width:0,height:0};
   return{angles:unwrapAngles(rotations),cx:Number(bounds.x)+Number(bounds.width)/2,cy:Number(bounds.y)+Number(bounds.height)/2};
 }
 function runtime(data){
@@ -87,31 +141,20 @@ function patchFallbackScript(text){
   const replacement="const swap=group.getAttribute('data-fallback-mode')==='swap',chosen=swap&&q.segment?(p<.5?resolvedFrom:resolvedTo):resolvedFrom,visible=swap?i===chosen:(i===resolvedFrom||i===resolvedTo);child.setAttribute('visibility',visible?'visible':'hidden');if(swap)child.setAttribute('opacity',i===chosen?'1':'0');else if(resolvedFrom===resolvedTo)child.setAttribute('opacity',i===resolvedFrom?'1':'0');else child.setAttribute('opacity',i===resolvedTo&&q.segment?String(p):i===resolvedFrom&&q.segment?String(1-p):i===resolvedFrom?'1':'0')";
   return source.includes(needle)?source.replace(needle,replacement):source;
 }
-function spinnerContainerInfo(manifest,schedule){
-  const stateMap=new Map((manifest.states||[]).map(state=>[state.id,state]));
-  const firstState=stateMap.get(schedule.stateIds[0]);
-  if(!firstState)return null;
-  const container=(firstState.layers||[]).find(layer=>layer.type==='FRAME'&&String(layer.stableNodeId||'').endsWith('@root/container[0]'));
-  const rotor=(firstState.layers||[]).find(layer=>layer.type==='FRAME'&&String(layer.stableNodeId||'').includes('/hugeiconsrefresh-03-stroke-rounded-1[0]'));
-  if(!container)return null;
-  return{
-    containerId:String(container.stableNodeId||''),
-    rotorId:rotor?String(rotor.stableNodeId||''):'',
-    bounds:container.bounds||null
-  };
-}
 function repair(result,manifest){
+  const manifestToUse=result.normalizedManifest||manifest;
   const doc=new DOMParser().parseFromString(result.svg,'image/svg+xml');
   const error=doc.querySelector('parsererror');
   if(error)throw new Error('Không thể sửa hiệu ứng SVG: '+error.textContent.slice(0,180));
   const svg=doc.documentElement;
+  const connectorInfo=inferConnectorInfo(manifestToUse,result.schedule);
   // Find the real dashed connector line by its stroke attribute (stroke-only path with dasharray)
   // The geometry matcher ignores stroke-only paths so vector-1[0] may be matched to a wrong element.
   const realConnector = svg.querySelector('[stroke-dasharray][stroke]');
-  if (realConnector) {
+  if (realConnector&&connectorInfo&&connectorInfo.id) {
     realConnector.removeAttribute('data-track-index');
     realConnector.setAttribute('data-static-connector', 'true');
-    realConnector.setAttribute('data-motion-id', '1:4181:@root/vector-1[0]');
+    realConnector.setAttribute('data-motion-id', connectorInfo.id);
     // Move the real connector to be a direct child of #motion-scene if needed
     const scene = svg.querySelector('#motion-scene');
     if (scene && realConnector.parentNode && realConnector.parentNode !== scene) {
@@ -120,7 +163,10 @@ function repair(result,manifest){
     }
   }
   // Also clear any wrong assignment of static-connector from the element that was incorrectly matched to vector-1[0]
-  const wrongConnector = svg.querySelector('[data-motion-id$="@root/vector-1[0]"]:not([stroke-dasharray])');
+  let wrongConnector=null;
+  if(connectorInfo&&connectorInfo.id){
+    wrongConnector=[...svg.querySelectorAll('[data-motion-id]')].find(el=>el.getAttribute('data-motion-id')===connectorInfo.id&&!el.hasAttribute('stroke-dasharray'))||null;
+  }
   if (wrongConnector) {
     wrongConnector.removeAttribute('data-static-connector');
     wrongConnector.removeAttribute('data-track-index');
@@ -129,7 +175,7 @@ function repair(result,manifest){
   // Fix spinner hierarchy: rebuild the container from the actual 64x64 card layers plus the rotor.
   // The compiler can mis-assign @root/container[0] because the frame fill and its child spinner are emitted as siblings.
   const scene = svg.querySelector('#motion-scene');
-  const spinnerInfo=spinnerContainerInfo(manifest,result.schedule);
+  const spinnerInfo=inferSpinnerInfo(manifestToUse,result.schedule);
   let wrongContainerEl = null;
   let refreshPath = null;
 
@@ -140,7 +186,7 @@ function repair(result,manifest){
     if (spinnerInfo && mid === spinnerInfo.containerId) {
       wrongContainerEl = el;
     }
-    if (mid.includes('hugeiconsrefresh-03-stroke-rounded-1')) {
+    if (spinnerInfo && spinnerInfo.rotorId && mid === spinnerInfo.rotorId) {
       refreshPath = el;
     }
   });
@@ -207,7 +253,7 @@ function repair(result,manifest){
     }
   });
 
-  const motion=refreshMotion(manifest,result.schedule);
+  const motion=refreshMotion(manifestToUse,result.schedule);
   const script=document.createElementNS('http://www.w3.org/2000/svg','script');
   script.textContent=runtime({
     duration:result.schedule.totalDuration,
