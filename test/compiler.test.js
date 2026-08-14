@@ -153,13 +153,23 @@ function getPathBounds(d) {
   };
 }
 
+const { JSDOM } = require("jsdom");
 const rootManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../fixtures/progress-bar-manifest.json"), "utf8"));
 const rootResult = compileManifest(rootManifest);
-const rootRuntimeMatch = rootResult.svg.match(/const D=(\{.*?\}),svg=/s);
-assert.ok(rootRuntimeMatch, "root manifest should embed runtime data");
+assert.ok(rootResult.runtimeSvg, "v4 compiler should retain internal runtime SVG for diagnostics");
+assert.ok(!/<script\b/i.test(rootResult.svg), "downloaded standalone SVG must not contain script tags");
+assert.ok(rootResult.svg.includes("<animate"), "downloaded standalone SVG should contain declarative SMIL animation");
+assert.ok(rootResult.svg.includes('data-script-free="true"'), "downloaded standalone SVG should advertise script-free mode");
+const standaloneRootDoc = new JSDOM(rootResult.svg, { contentType: "image/svg+xml" }).window.document;
+assert.strictEqual(standaloneRootDoc.querySelectorAll("script").length, 0, "standalone SVG DOM must be script-free");
+assert.ok(standaloneRootDoc.querySelectorAll("animate").length > 0, "standalone SVG DOM should contain SMIL animation nodes");
+const rootHtmlDoc = new JSDOM(rootResult.html).window.document;
+assert.strictEqual(rootHtmlDoc.querySelectorAll("#motion-svg script").length, 0, "HTML should embed the pure SVG without SVG-local scripts");
+assert.ok(rootHtmlDoc.querySelectorAll("body > script").length > 0, "HTML should keep its playback runtime outside the SVG");
+const rootRuntimeMatch = rootResult.runtimeSvg.match(/const D=(\{.*?\}),svg=/s);
+assert.ok(rootRuntimeMatch, "root manifest internal runtime should keep diagnostic track data");
 const rootRuntimeData = JSON.parse(rootRuntimeMatch[1]);
-const { JSDOM } = require("jsdom");
-const rootDoc = new JSDOM(rootResult.svg, { contentType: "image/svg+xml" }).window.document;
+const rootDoc = new JSDOM(rootResult.runtimeSvg, { contentType: "image/svg+xml" }).window.document;
 const barEl = rootDoc.querySelector('[data-motion-id="1:4475:@root/bar[0]"]');
 const activeEl = rootDoc.querySelector('[data-motion-id="1:4475:@root/active[0]"]');
 const cardBgEl = rootDoc.querySelector('[data-motion-id="1:4475:@root/doc-icon[0]/background[0]"]');
@@ -168,7 +178,7 @@ assert.ok(activeEl, "root manifest should compile an active progress fill");
 assert.ok(cardBgEl, "root manifest should preserve icon card background mapping");
 assert.ok(/^url\(#/.test(barEl.getAttribute("fill") || ""), "progress track should keep its gradient fill");
 assert.ok(/^url\(#/.test(activeEl.getAttribute("fill") || ""), "active progress fill should keep its gradient fill");
-assert.ok(rootResult.svg.includes("referencedColorInterpolation"), "root manifest should opt into referenced color interpolation for line transitions");
+assert.ok(rootResult.runtimeSvg.includes("referencedColorInterpolation"), "root manifest should opt into referenced color interpolation for line transitions");
 const barTrack = rootRuntimeData.tracks.find(track => track.id === "1:4475:@root/bar[0]");
 assert.ok(barTrack, "root manifest should keep runtime track data for bar");
 assert.strictEqual(new Set(barTrack.colors.map(colorSet => colorSet && colorSet.fill).filter(Boolean)).size, 1, "equivalent bar gradients should be normalized to one paint ref");
@@ -179,14 +189,15 @@ assert.ok(barBounds.width > 300 && barBounds.height >= 19, "progress track shoul
 assert.ok(activeBounds.width < 1 && activeBounds.height >= 19, "active progress fill should start nearly empty");
 assert.ok(cardBounds.width > 60 && cardBounds.width < 70 && cardBounds.y < 120, "icon card background should stay mapped to the top card");
 assert.ok(!result.svg.includes("referencedColorInterpolation"), "generic fixture should keep legacy referenced color snapping");
-assert.ok(!rootResult.svg.includes("ensurePaintDef"), "root manifest should avoid runtime gradient helper defs that can cause flashing");
+assert.ok(!rootResult.runtimeSvg.includes("ensurePaintDef"), "root manifest should avoid runtime gradient helper defs that can cause flashing");
 
 const avatarManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../correct-result/3/motion-manifest.json"), "utf8"));
 const avatarResult = compileManifest(avatarManifest);
-assert.ok(avatarResult.svg.includes("pattern0_motion_shared_state0"), "avatar manifest should preserve avatar pattern defs");
-assert.ok(avatarResult.svg.includes("image0_motion_shared_state0"), "avatar manifest should preserve image defs referenced by avatar patterns");
-assert.ok(avatarResult.svg.includes("data:image/png;base64,"), "avatar manifest should keep embedded avatar image data");
-const avatarDoc = new JSDOM(avatarResult.svg, { contentType: "image/svg+xml" }).window.document;
+assert.ok(!/<script\b/i.test(avatarResult.svg), "avatar standalone SVG must be script-free");
+assert.ok(avatarResult.runtimeSvg.includes("pattern0_motion_shared_state0"), "avatar manifest should preserve avatar pattern defs");
+assert.ok(avatarResult.runtimeSvg.includes("image0_motion_shared_state0"), "avatar manifest should preserve image defs referenced by avatar patterns");
+assert.ok(avatarResult.runtimeSvg.includes("data:image/png;base64,"), "avatar manifest should keep embedded avatar image data");
+const avatarDoc = new JSDOM(avatarResult.runtimeSvg, { contentType: "image/svg+xml" }).window.document;
 avatarDoc.querySelectorAll('[data-motion-id*="@root/piechart["], [data-exact-ring]').forEach(node => {
   assert.ok(!node.hasAttribute("filter"), "pie chart containers should not keep direct filter attributes");
   node.querySelectorAll("[filter]").forEach(child => {
@@ -196,9 +207,11 @@ avatarDoc.querySelectorAll('[data-motion-id*="@root/piechart["], [data-exact-rin
 
 const liveManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../motion-manifest.json"), "utf8"));
 const liveResult = compileManifest(liveManifest);
-const liveDoc = new JSDOM(liveResult.svg, { contentType: "image/svg+xml" }).window.document;
-const liveRuntimeMatch = liveResult.svg.match(/const D=(\{.*?\}),svg=/s);
-assert.ok(liveRuntimeMatch, "live manifest should embed runtime data");
+assert.ok(!/<script\b/i.test(liveResult.svg), "live standalone SVG must be script-free");
+assert.ok(/standalone-smil-(?:smart-animate|crossfade)/.test(liveResult.svg), "live standalone SVG should use declarative SMIL mode");
+const liveDoc = new JSDOM(liveResult.runtimeSvg, { contentType: "image/svg+xml" }).window.document;
+const liveRuntimeMatch = liveResult.runtimeSvg.match(/const D=(\{.*?\}),svg=/s);
+assert.ok(liveRuntimeMatch, "live manifest internal runtime should keep diagnostic data");
 const liveRuntimeData = JSON.parse(liveRuntimeMatch[1]);
 liveDoc.querySelectorAll('[data-motion-id*="piechart"], [data-motion-id*="mask-group"], [data-exact-ring]').forEach(node => {
   assert.ok(!node.hasAttribute("filter"), "live pie chart containers should not keep direct filter attributes");
