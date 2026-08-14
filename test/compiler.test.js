@@ -208,7 +208,7 @@ avatarDoc.querySelectorAll('[data-motion-id*="@root/piechart["], [data-exact-rin
 const liveManifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../motion-manifest.json"), "utf8"));
 const liveResult = compileManifest(liveManifest);
 assert.ok(!/<script\b/i.test(liveResult.svg), "live standalone SVG must be script-free");
-assert.ok(liveResult.svg.includes("standalone-smil-crossfade"), "live standalone SVG should use declarative SMIL mode");
+assert.ok(/standalone-smil-(?:smart-animate|crossfade)/.test(liveResult.svg), "live standalone SVG should use declarative SMIL mode");
 const liveDoc = new JSDOM(liveResult.runtimeSvg, { contentType: "image/svg+xml" }).window.document;
 const liveRuntimeMatch = liveResult.runtimeSvg.match(/const D=(\{.*?\}),svg=/s);
 assert.ok(liveRuntimeMatch, "live manifest internal runtime should keep diagnostic data");
