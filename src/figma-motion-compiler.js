@@ -108,7 +108,7 @@ function compileManifestV4(manifest, options = {}) {
     "semantic-1.js", "semantic-2.js", "semantic-3.js", "semantic-4.js", "semantic-5.js",
     "semantic-6.js", "semantic-7.js", "semantic-8.js", "semantic-9.js", "semantic-10.js",
     "semantic-11.js", "semantic-12.js", "semantic-15.js", "semantic-13.js", "semantic-14.js",
-    "semantic-16.js", "semantic-runtime-fix.js"
+    "semantic-16.js", "semantic-runtime-fix.js", "semantic-17.js"
   ];
 
   for (const scriptName of scripts) {
@@ -139,6 +139,7 @@ function compileManifestV4(manifest, options = {}) {
   return {
     svg: outputs.svg,
     html: outputs.html,
+    runtimeSvg: outputs.runtimeSvg,
     prototype: outputs.ir,
     report: report,
     schedule: outputs.report.schedule
